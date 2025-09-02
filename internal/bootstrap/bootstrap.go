@@ -1,4 +1,3 @@
 package bootstrap
 
-func New() {
-}
+func New() {}
