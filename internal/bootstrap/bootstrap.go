@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/database"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/handlers"
@@ -84,35 +85,34 @@ func New() {
 
 func setupRoutes(app *fiber.App, documentHandler *handlers.DocumentHandler, uploadHandler *handlers.UploadHandler, docsHandler *handlers.DocsHandler) {
 	app.Get("/", docsHandler.GetAPIInfo)
+	app.Get("/health", healthCheckHandler)
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status": "healthy",
-			"timestamp": time.Now().Unix(),
-		})
-	})
+	docs := app.Group("/docs")
+	docs.Get("/", docsHandler.ServeScalarDocs)
+	docs.Get("/openapi.yaml", docsHandler.ServeOpenAPISpec)
 
-	// Documentation routes
-	app.Get("/docs", docsHandler.ServeScalarDocs)
-	app.Get("/docs/openapi.yaml", docsHandler.ServeOpenAPISpec)
+	v1 := app.Group("/api/v1")
 
-	api := app.Group("/api/v1")
+	documents := v1.Group("/documents")
+	documents.Get("/", documentHandler.ListDocuments)
+	documents.Get("/:id", documentHandler.GetDocument)
+	documents.Delete("/:id", documentHandler.DeleteDocument)
+	documents.Post("/:documentId/process-graph", documentHandler.ProcessDocumentWithGraphType)
 
-	// Legacy upload endpoint (for backwards compatibility)
-	api.Post("/upload-pdf", documentHandler.UploadPDF)
-	
-	// New chunked upload endpoints
-	api.Post("/upload/initiate", uploadHandler.InitiateUpload)
-	api.Post("/upload/chunk", uploadHandler.UploadChunk)
-	api.Post("/upload/:sessionId/complete", uploadHandler.CompleteUpload)
-	api.Delete("/upload/:sessionId/abort", uploadHandler.AbortUpload)
-	api.Get("/upload/:sessionId/progress", uploadHandler.GetUploadProgress)
-	
-	// Document management endpoints
-	api.Get("/documents", documentHandler.ListDocuments)
-	api.Get("/documents/:id", documentHandler.GetDocument)
-	api.Delete("/documents/:id", documentHandler.DeleteDocument)
-	api.Post("/documents/:documentId/process-graph", documentHandler.ProcessDocumentWithGraphType)
-	api.Get("/graphs/:id", documentHandler.GetGraphNetwork)
-	api.Get("/graphs/:id/centroid", documentHandler.GetCentroid)
+	v1.Post("/upload-pdf", documentHandler.UploadPDF)
+
+	upload := v1.Group("/upload")
+	upload.Post("/initiate", uploadHandler.InitiateUpload)
+	upload.Post("/chunk", uploadHandler.UploadChunk)
+	upload.Post("/:sessionId/complete", uploadHandler.CompleteUpload)
+	upload.Delete("/:sessionId/abort", uploadHandler.AbortUpload)
+	upload.Get("/:sessionId/progress", uploadHandler.GetUploadProgress)
+
+	graphs := v1.Group("/graphs")
+	graphs.Get("/:id", documentHandler.GetGraphNetwork)
+	graphs.Get("/:id/centroid", documentHandler.GetCentroid)
+}
+
+func healthCheckHandler(c *fiber.Ctx) error {
+	return c.SendStatus(fiber.StatusOK)
 }

@@ -1,29 +1,57 @@
-# Prevent vendor directory from being copied to ensure we are not not pulling unexpected cruft from 
-# a user's workspace, and are only building off of what is locked by dep.
+# Build optimization - exclude unnecessary files
+.git/
+.github/
 .vscode/
 .idea/
 .DS_Store
+.env
+.env.*
+!.env.example
+
+# Dependencies and build artifacts
 vendor/
+node_modules/
 dist/
 *.iml
-# delve debug binaries
-cmd/**/debug
-debug.test
-coverage.out
-ui/node_modules/
-test-results/
-test/
-manifests/
-hack/
+
+# Documentation and examples
 docs/
 examples/
-.github/
-!test/container
-!test/e2e/testdata
-!test/fixture
-!test/remote
-!hack/installers
-!hack/gpg-wrapper.sh
-!hack/git-verify-wrapper.sh
-!hack/tool-versions.sh
-!hack/install.sh
+README.md
+*.md
+!DOCKER.md
+
+# Test files and coverage
+*_test.go
+test/
+e2e/
+integration/
+test-results/
+coverage.out
+*.test
+
+# Development tools
+scripts/
+hack/
+manifests/
+.devcontainer/
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+.tmp/
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+
+# OS generated files
+Thumbs.db
+.directory
+
+# Docker files (avoid recursive copying)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
