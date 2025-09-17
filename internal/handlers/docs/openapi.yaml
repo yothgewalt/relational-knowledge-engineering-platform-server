@@ -1,0 +1,907 @@
+openapi: 3.0.3
+info:
+  title: Relational Knowledge Engineering Platform API
+  description: |
+    A comprehensive API for document processing, knowledge extraction, and graph-based analysis.
+    
+    The platform supports:
+    - PDF document upload and processing
+    - Chunked file uploads for large documents
+    - Text extraction and NLP processing
+    - Knowledge graph generation and analysis
+    - Document management and retrieval
+    
+    ## Authentication
+    Currently, the API does not require authentication for public endpoints.
+    
+    ## Rate Limiting
+    No rate limiting is currently implemented.
+    
+    ## Error Handling
+    All endpoints return consistent error responses with appropriate HTTP status codes.
+  version: 1.0.0
+  contact:
+    name: Relational Knowledge Engineering Platform
+    url: https://github.com/yothgewalt/relational-knowledge-engineering-platform-server
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Health
+    description: Health check and system status endpoints
+  - name: Upload
+    description: Document upload operations (chunked and legacy)
+  - name: Documents
+    description: Document management and retrieval
+  - name: Graphs
+    description: Knowledge graph operations and analysis
+
+paths:
+  /:
+    get:
+      tags: [Health]
+      summary: Get API information
+      description: Returns basic information about the API and its status
+      operationId: getApiInfo
+      responses:
+        '200':
+          description: API information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Welcome to Relational Knowledge Engineering Platform Server"
+                  status:
+                    type: string
+                    example: "running"
+                  version:
+                    type: string
+                    example: "1.0.0"
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns the health status of the API
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: integer
+                    format: int64
+                    example: 1640995200
+
+  /api/v1/upload-pdf:
+    post:
+      tags: [Upload]
+      summary: Upload PDF (Legacy)
+      description: |
+        Legacy endpoint for uploading PDF files. 
+        For large files, consider using the chunked upload endpoints instead.
+      operationId: uploadPdfLegacy
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to upload
+              required:
+                - file
+      responses:
+        '200':
+          description: PDF uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/upload/initiate:
+    post:
+      tags: [Upload]
+      summary: Initiate chunked upload
+      description: |
+        Initiates a new chunked upload session for large files.
+        Returns session information including chunk size and upload ID.
+      operationId: initiateUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiateUploadRequest'
+      responses:
+        '200':
+          description: Upload session initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    format: uuid
+                    example: "123e4567-e89b-12d3-a456-426614174000"
+                  upload_id:
+                    type: string
+                    example: "upload-123456"
+                  chunk_size:
+                    type: integer
+                    format: int64
+                    example: 5242880
+                  total_chunks:
+                    type: integer
+                    example: 10
+                  minio_key:
+                    type: string
+                    example: "uploads/123e4567-e89b-12d3-a456-426614174000/document.pdf"
+                  message:
+                    type: string
+                    example: "Upload session initiated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/upload/chunk:
+    post:
+      tags: [Upload]
+      summary: Upload file chunk
+      description: |
+        Uploads a single chunk of a file to an existing upload session.
+        Chunks must be uploaded in order.
+      operationId: uploadChunk
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                session_id:
+                  type: string
+                  format: uuid
+                  description: Upload session ID
+                chunk_index:
+                  type: integer
+                  description: Index of the chunk (starting from 1)
+                chunk:
+                  type: string
+                  format: binary
+                  description: Binary chunk data
+              required:
+                - session_id
+                - chunk_index
+                - chunk
+      responses:
+        '200':
+          description: Chunk uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    format: uuid
+                  chunk_index:
+                    type: integer
+                  chunk_etag:
+                    type: string
+                  uploaded_chunks:
+                    type: integer
+                  total_chunks:
+                    type: integer
+                  message:
+                    type: string
+                    example: "Chunk uploaded successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/upload/{sessionId}/complete:
+    post:
+      tags: [Upload]
+      summary: Complete chunked upload
+      description: |
+        Completes a chunked upload session by combining all uploaded chunks.
+        All chunks must be uploaded before calling this endpoint.
+      operationId: completeUpload
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Upload session ID
+      responses:
+        '200':
+          description: Upload completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    format: uuid
+                  file_info:
+                    $ref: '#/components/schemas/FileInfo'
+                  message:
+                    type: string
+                    example: "Upload completed successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/upload/{sessionId}/abort:
+    delete:
+      tags: [Upload]
+      summary: Abort chunked upload
+      description: |
+        Aborts an active upload session and cleans up any uploaded chunks.
+        This operation cannot be undone.
+      operationId: abortUpload
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Upload session ID
+      responses:
+        '200':
+          description: Upload aborted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+                    example: "Upload aborted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/upload/{sessionId}/progress:
+    get:
+      tags: [Upload]
+      summary: Get upload progress
+      description: |
+        Returns the current progress of an upload session including
+        uploaded chunks, total progress, and session status.
+      operationId: getUploadProgress
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Upload session ID
+      responses:
+        '200':
+          description: Upload progress retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadProgress'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/documents:
+    get:
+      tags: [Documents]
+      summary: List documents
+      description: |
+        Retrieves a list of all uploaded documents with their metadata and processing status.
+      operationId: listDocuments
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Maximum number of documents to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of documents to skip
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ProcessingStatus'
+          description: Filter by processing status
+      responses:
+        '200':
+          description: Documents retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get document by ID
+      description: |
+        Retrieves a specific document by its ID, including all extracted text,
+        processing results, and metadata.
+      operationId: getDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Document ID
+      responses:
+        '200':
+          description: Document retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      tags: [Documents]
+      summary: Delete document
+      description: |
+        Deletes a document and all associated data including extracted text,
+        graph data, and the original file. This operation cannot be undone.
+      operationId: deleteDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Document ID
+      responses:
+        '200':
+          description: Document deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Document deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/graphs/{id}:
+    get:
+      tags: [Graphs]
+      summary: Get knowledge graph
+      description: |
+        Retrieves the knowledge graph network for a specific document,
+        including nodes, edges, and their relationships.
+      operationId: getGraphNetwork
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Document ID
+      responses:
+        '200':
+          description: Graph network retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphNetwork'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/graphs/{id}/centroid:
+    get:
+      tags: [Graphs]
+      summary: Get graph centroid
+      description: |
+        Calculates and returns the centroid analysis of the knowledge graph,
+        identifying key concepts and their importance.
+      operationId: getGraphCentroid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Document ID
+      responses:
+        '200':
+          description: Graph centroid calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphCentroid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    InitiateUploadRequest:
+      type: object
+      required:
+        - filename
+        - file_size
+        - content_type
+      properties:
+        filename:
+          type: string
+          example: "research-paper.pdf"
+          description: Name of the file to upload
+        file_size:
+          type: integer
+          format: int64
+          example: 52428800
+          description: Size of the file in bytes
+        content_type:
+          type: string
+          example: "application/pdf"
+          description: MIME type of the file
+        chunk_size:
+          type: integer
+          format: int64
+          example: 5242880
+          description: Preferred chunk size in bytes (optional)
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            author: "John Doe"
+            category: "research"
+          description: Additional metadata for the file
+
+    UploadProgress:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        filename:
+          type: string
+          example: "research-paper.pdf"
+        file_size:
+          type: integer
+          format: int64
+          example: 52428800
+        uploaded_bytes:
+          type: integer
+          format: int64
+          example: 26214400
+        completed_chunks:
+          type: integer
+          example: 5
+        total_chunks:
+          type: integer
+          example: 10
+        progress:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          example: 50.0
+        status:
+          type: string
+          enum: [active, completed, failed, aborted]
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+          example: "2023-12-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2023-12-01T10:30:00Z"
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "doc_123e4567-e89b-12d3-a456-426614174000"
+        filename:
+          type: string
+          example: "research-paper.pdf"
+        content_type:
+          type: string
+          example: "application/pdf"
+        size:
+          type: integer
+          format: int64
+          example: 52428800
+        uploaded_at:
+          type: string
+          format: date-time
+          example: "2023-12-01T10:00:00Z"
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2023-12-01T10:05:00Z"
+        status:
+          $ref: '#/components/schemas/ProcessingStatus'
+        extracted_text:
+          $ref: '#/components/schemas/ExtractedText'
+        processed_text:
+          $ref: '#/components/schemas/ProcessedText'
+        graph_id:
+          type: string
+          nullable: true
+          example: "graph_123e4567-e89b-12d3-a456-426614174000"
+        error_message:
+          type: string
+          nullable: true
+          example: null
+
+    ProcessingStatus:
+      type: string
+      enum: [uploaded, processing, completed, error]
+      description: Current processing status of the document
+
+    ExtractedText:
+      type: object
+      properties:
+        content:
+          type: string
+          description: Raw extracted text from the document
+        metadata:
+          type: object
+          description: Additional extraction metadata
+        page_count:
+          type: integer
+          description: Number of pages processed
+
+    ProcessedText:
+      type: object
+      properties:
+        sentences:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sentence'
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+        keywords:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+          description: Generated summary of the document
+
+    Sentence:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The sentence text
+        start_offset:
+          type: integer
+          description: Character offset where sentence starts
+        end_offset:
+          type: integer
+          description: Character offset where sentence ends
+        sentiment:
+          type: number
+          format: float
+          minimum: -1
+          maximum: 1
+          description: Sentiment score (-1 to 1)
+
+    Entity:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The entity text
+        label:
+          type: string
+          description: Entity type/label
+        start_offset:
+          type: integer
+          description: Character offset where entity starts
+        end_offset:
+          type: integer
+          description: Character offset where entity ends
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Confidence score (0 to 1)
+
+    FileInfo:
+      type: object
+      properties:
+        key:
+          type: string
+          example: "uploads/123e4567-e89b-12d3-a456-426614174000/document.pdf"
+        size:
+          type: integer
+          format: int64
+          example: 52428800
+        content_type:
+          type: string
+          example: "application/pdf"
+        last_modified:
+          type: string
+          format: date-time
+          example: "2023-12-01T10:00:00Z"
+        etag:
+          type: string
+          example: "d41d8cd98f00b204e9800998ecf8427e"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    GraphNetwork:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+        metadata:
+          type: object
+          properties:
+            total_nodes:
+              type: integer
+            total_edges:
+              type: integer
+            creation_time:
+              type: string
+              format: date-time
+
+    GraphNode:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique node identifier
+        label:
+          type: string
+          description: Node label/name
+        type:
+          type: string
+          description: Node type (entity, concept, etc.)
+        properties:
+          type: object
+          additionalProperties: true
+          description: Additional node properties
+        weight:
+          type: number
+          format: float
+          description: Node importance weight
+
+    GraphEdge:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique edge identifier
+        source:
+          type: string
+          description: Source node ID
+        target:
+          type: string
+          description: Target node ID
+        relationship:
+          type: string
+          description: Type of relationship
+        weight:
+          type: number
+          format: float
+          description: Edge weight/strength
+        properties:
+          type: object
+          additionalProperties: true
+          description: Additional edge properties
+
+    GraphCentroid:
+      type: object
+      properties:
+        centroid_nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CentroidNode'
+        centrality_metrics:
+          type: object
+          properties:
+            betweenness:
+              type: object
+              additionalProperties:
+                type: number
+                format: float
+            closeness:
+              type: object
+              additionalProperties:
+                type: number
+                format: float
+            degree:
+              type: object
+              additionalProperties:
+                type: number
+                format: float
+        analysis_summary:
+          type: object
+          properties:
+            most_central_concept:
+              type: string
+            key_themes:
+              type: array
+              items:
+                type: string
+            connectivity_score:
+              type: number
+              format: float
+
+    CentroidNode:
+      type: object
+      properties:
+        node_id:
+          type: string
+        label:
+          type: string
+        centrality_score:
+          type: number
+          format: float
+        rank:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: integer
+          description: HTTP status code
+        details:
+          type: object
+          description: Additional error details
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid request parameters"
+            code: 400
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Resource not found"
+            code: 404
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+            code: 500
+
+  examples:
+    SampleDocument:
+      summary: Sample research document
+      value:
+        id: "doc_123e4567-e89b-12d3-a456-426614174000"
+        filename: "ai-research-paper.pdf"
+        content_type: "application/pdf"
+        size: 2548736
+        uploaded_at: "2023-12-01T10:00:00Z"
+        processed_at: "2023-12-01T10:05:30Z"
+        status: "completed"
+        extracted_text:
+          content: "Artificial Intelligence has shown remarkable progress..."
+          page_count: 12
+        graph_id: "graph_123e4567-e89b-12d3-a456-426614174000"
+
+    SampleUploadProgress:
+      summary: Upload in progress
+      value:
+        session_id: "123e4567-e89b-12d3-a456-426614174000"
+        filename: "large-document.pdf"
+        file_size: 52428800
+        uploaded_bytes: 26214400
+        completed_chunks: 5
+        total_chunks: 10
+        progress: 50.0
+        status: "active"
+        created_at: "2023-12-01T10:00:00Z"
+        updated_at: "2023-12-01T10:30:00Z"

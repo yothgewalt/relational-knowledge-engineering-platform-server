@@ -1,0 +1,34 @@
+{
+	"name": "Relational Knowledge Engineering Platform Server",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "app",
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {},
+		"ghcr.io/nils-geistmann/devcontainers-features/zsh:0": {},
+		"ghcr.io/devcontainers/features/node:1": {}
+	},
+
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"golang.go",
+				"aaron-bond.better-comments",
+				"Anthropic.claude-code",
+				"EditorConfig.EditorConfig",
+				"IgorSbitnev.error-gutters",
+				"usernamehw.errorlens",
+				"aleksandra.go-group-imports",
+				"AnirudhAgarwal.go-implementation-lens",
+				"premparihar.gotestexplorer",
+				"nhoizey.gremlins",
+				"hashicorp.terraform",
+				"yzhang.markdown-all-in-one",
+				"PKief.material-icon-theme",
+				"christian-kohler.path-intellisense"
+			]
+		}
+	},
+
+	"postCreateCommand": "go mod tidy && curl -fsSL https://claude.ai/install.sh | bash -s latest"
+}
