@@ -3,9 +3,9 @@ services:
         image: mongo:8.0.13-noble
         container_name: mongodb
         environment:
-            MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
-            MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
-            MONGO_INITDB_DATABASE: ${MONGODB_DATABASE}
+            MONGO_INITDB_ROOT_USERNAME: mongo
+            MONGO_INITDB_ROOT_PASSWORD: eQDGB2mv2V2c7H1FJ3TnpZVJ
+            MONGO_INITDB_DATABASE: relational_knowledge_engineering_platform
         ports:
             - "27017:27017"
         volumes:
@@ -26,7 +26,7 @@ services:
     redis:
         image: redis:8.2.1-alpine3.22
         container_name: redis
-        command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+        command: redis-server /usr/local/etc/redis/redis.conf --requirepass R7KUONlpUfFWAt85zCZ6vdfy
         ports:
             - "6379:6379"
         volumes:
@@ -34,7 +34,7 @@ services:
             - ./configurations/redis.conf:/usr/local/etc/redis/redis.conf:ro
         restart: always
         healthcheck:
-            test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping"]
+            test: ["CMD-SHELL", "redis-cli -a R7KUONlpUfFWAt85zCZ6vdfy ping"]
             interval: 10s
             timeout: 5s
             retries: 5
@@ -47,9 +47,9 @@ services:
         container_name: minio
         command: server /data --console-address ":9001"
         environment:
-            MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-            MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-            MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
+            MINIO_ROOT_USER: minio
+            MINIO_ROOT_PASSWORD: 7vvInMiCa52g1dj8JG1fRRS9
+            MINIO_DEFAULT_BUCKETS: files
         ports:
             - "9000:9000"
             - "9001:9001"
@@ -69,7 +69,7 @@ services:
         image: neo4j:5.26.12-community-bullseye
         container_name: neo4j
         environment:
-            NEO4J_AUTH: ${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+            NEO4J_AUTH: neo4j/BTHOo7ZBg1mGZgZ1h3RZMIkK
             NEO4J_PLUGINS: '["apoc"]'
             NEO4J_apoc_export_file_enabled: true
             NEO4J_apoc_import_file_enabled: true
@@ -90,7 +90,7 @@ services:
             - internal
         restart: unless-stopped
         healthcheck:
-            test: [ "CMD", "cypher-shell", "-u", "${NEO4J_USERNAME}", "-p", "${NEO4J_PASSWORD}", "RETURN 1" ]
+            test: [ "CMD", "cypher-shell", "-u", "neo4j", "-p", "BTHOo7ZBg1mGZgZ1h3RZMIkK", "RETURN 1" ]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -212,6 +212,7 @@ volumes:
     qdrant_data:
     qdrant_config:
     vault_data:
+    vault_logs:
     consul_data:
 
 networks:
