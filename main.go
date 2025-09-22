@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,33 +9,61 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/yokeTH/gofiber-scalar/scalar/v2"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
+	_ "github.com/yothgewalt/relational-knowledge-engineering-platform-server/docs"
 )
 
 func main() {
+	// Load configuration
+	cfg := config.MustLoad()
+	
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	app := fiber.New(fiber.Config{
-		AppName:      "Relational Knowledge Engineering Platform",
-		ServerHeader: "Fiber",
-		IdleTimeout:  30 * time.Second,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		AppName:               cfg.Server.AppName,
+		ServerHeader:          "Fiber",
+		IdleTimeout:           cfg.Server.IdleTimeout,
+		ReadTimeout:           cfg.Server.ReadTimeout,
+		WriteTimeout:          cfg.Server.WriteTimeout,
+		DisableStartupMessage: true,
 	})
 
-	scalarConfigV1 := scalar.Config{
-		BasePath: "/api/v1",
-		Path:     "docs",
-		Title:    "Relational Knowledge Engineering Platform API Documentation",
+	// scalarConfigV1 := scalar.Config{
+	// 	Next:             nil,
+	// 	BasePath:         "/api/v1",
+	// 	Path:             "docs",
+	// 	Title:            "Relational Knowledge Engineering Platform API Documentation",
+	// 	CacheAge:         60,
+	// 	Theme:            scalar.ThemeNone,
+	// 	RawSpecUrl:       "swagger.json",
+	// 	ForceOffline:     true,
+	// 	FallbackCacheAge: 86400,
+	// }
+	// app.Use(scalar.New(scalarConfigV1))
+	
+	// Configure CORS based on config
+	if cfg.Security.CORSEnabled {
+		app.Use(cors.New())
 	}
-	app.Use(scalar.New(scalarConfigV1))
-	app.Use(cors.New())
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status":    "ok",
-			"message":   "Server is running",
-			"timestamp": time.Now(),
+	// Health check endpoint (configurable)
+	if cfg.Features.HealthCheckEnabled {
+		app.Get("/health", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{
+				"status":    "ok",
+				"message":   "Server is running",
+				"timestamp": time.Now(),
+				"config": fiber.Map{
+					"app_name": cfg.Server.AppName,
+					"version":  "1.0.0",
+				},
+			})
 		})
-	})
+	}
 
 	v1 := app.Group("/v1")
 	v1.Get("/", func(c *fiber.Ctx) error {
@@ -135,14 +162,16 @@ func main() {
 	})
 
 	go func() {
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "3000"
-		}
+		log.Info().
+			Str("port", cfg.Server.Port).
+			Str("host", cfg.Server.Host).
+			Str("app_name", cfg.Server.AppName).
+			Bool("debug_mode", cfg.Features.DebugMode).
+			Msg("Server starting")
 
-		log.Printf("Server starting on port %s", port)
-		if err := app.Listen(":" + port); err != nil {
-			log.Fatalf("Error starting server: %v", err)
+		addr := cfg.Server.Host + ":" + cfg.Server.Port
+		if err := app.Listen(addr); err != nil {
+			log.Fatal().Err(err).Msg("Error starting server")
 		}
 	}()
 
@@ -150,14 +179,14 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	<-quit
-	log.Println("Server is shutting down...")
+	log.Info().Msg("Server is shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := app.ShutdownWithContext(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		log.Fatal().Err(err).Msg("Server forced to shutdown")
 	}
 
-	log.Println("Server exited")
+	log.Info().Msg("Server exited")
 }
