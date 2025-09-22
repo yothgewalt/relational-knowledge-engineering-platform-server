@@ -13,6 +13,7 @@ import (
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/consul"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/env"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
@@ -186,8 +187,15 @@ func (c *Container) initializeMongoDB() error {
 }
 
 func (c *Container) initializeVault() error {
-	vaultAddr := os.Getenv("VAULT_ADDRESS")
-	vaultToken := os.Getenv("VAULT_TOKEN")
+	vaultAddr, err := env.Get("VAULT_ADDRESS", "localhost:8200")
+	if err != nil {
+		return fmt.Errorf("failed to get VAULT_ADDRESS: %w", err)
+	}
+
+	vaultToken, err := env.Get("VAULT_TOKEN", "token")
+	if err != nil {
+		return fmt.Errorf("failed to get VAULT_TOKEN: %w", err)
+	}
 
 	if vaultAddr == "" || vaultToken == "" {
 		fmt.Printf("Vault configuration not provided, skipping Vault initialization\n")
