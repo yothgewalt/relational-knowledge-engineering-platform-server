@@ -1,17 +1,27 @@
 package config
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/env"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
 )
 
 type Config struct {
-	Server   ServerConfig   `json:"server"`
-	Mongo    MongoConfig    `json:"mongo"`
-	Redis    RedisConfig    `json:"redis"`
-	Features FeaturesConfig `json:"features"`
+	Server   ServerConfig       `json:"server"`
+	Mongo    MongoConfig        `json:"mongo"`
+	Redis    RedisConfig        `json:"redis"`
+	Features FeaturesConfig     `json:"features"`
+	Vault    VaultSecretsConfig `json:"vault"`
+}
+
+type VaultSecretsConfig struct {
+	MongoSecretPath  string `json:"mongo_secret_path"`
+	RedisSecretPath  string `json:"redis_secret_path"`
+	ResendSecretPath string `json:"resend_secret_path"`
 }
 
 type ServerConfig struct {
@@ -40,9 +50,10 @@ type FeaturesConfig struct {
 }
 
 var (
-	instance *Config
-	once     sync.Once
-	mu       sync.RWMutex
+	instance    *Config
+	once        sync.Once
+	mu          sync.RWMutex
+	vaultClient vault.VaultService
 )
 
 func Load() (*Config, error) {
@@ -59,6 +70,67 @@ func Load() (*Config, error) {
 	}
 
 	return instance, nil
+}
+
+func LoadWithVault(client vault.VaultService) (*Config, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	vaultClient = client
+
+	var err error
+	once.Do(func() {
+		instance, err = loadConfig()
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return instance, nil
+}
+
+func getFromVaultOrEnv(secretPath, key, envKey, defaultValue string) (string, error) {
+	if vaultClient != nil && secretPath != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		secretData, err := vaultClient.GetSecret(ctx, secretPath)
+		if err == nil {
+			if value, ok := secretData[key]; ok {
+				if strValue, ok := value.(string); ok {
+					return strValue, nil
+				}
+			}
+		}
+		fmt.Printf("Warning: Could not get %s from Vault path %s, falling back to environment variable\n", key, secretPath)
+	}
+
+	return env.Get(envKey, defaultValue)
+}
+
+func loadVaultSecretsConfig() (VaultSecretsConfig, error) {
+	var vaultConfig VaultSecretsConfig
+
+	mongoPath, err := env.Get("VAULT_MONGO_SECRET_PATH", "secret/database/mongodb")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.MongoSecretPath = mongoPath
+
+	redisPath, err := env.Get("VAULT_REDIS_SECRET_PATH", "secret/database/redis")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.RedisSecretPath = redisPath
+
+	resendPath, err := env.Get("VAULT_RESEND_SECRET_PATH", "secret/email/resend")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.ResendSecretPath = resendPath
+
+	return vaultConfig, nil
 }
 
 func loadServerConfig() (ServerConfig, error) {
@@ -91,28 +163,28 @@ func loadServerConfig() (ServerConfig, error) {
 	return serverConfig, nil
 }
 
-func loadMongoConfig() (MongoConfig, error) {
+func loadMongoConfig(vaultConfig VaultSecretsConfig) (MongoConfig, error) {
 	var mongoConfig MongoConfig
 
-	address, err := env.Get("MONGO_ADDRESS", "localhost:27017")
+	address, err := getFromVaultOrEnv(vaultConfig.MongoSecretPath, "address", "MONGO_ADDRESS", "localhost:27017")
 	if err != nil {
 		return mongoConfig, err
 	}
 	mongoConfig.Address = address
 
-	username, err := env.Get("MONGO_USERNAME", "admin")
+	username, err := getFromVaultOrEnv(vaultConfig.MongoSecretPath, "username", "MONGO_USERNAME", "admin")
 	if err != nil {
 		return mongoConfig, err
 	}
 	mongoConfig.Username = username
 
-	password, err := env.Get("MONGO_PASSWORD", "password")
+	password, err := getFromVaultOrEnv(vaultConfig.MongoSecretPath, "password", "MONGO_PASSWORD", "password")
 	if err != nil {
 		return mongoConfig, err
 	}
 	mongoConfig.Password = password
 
-	database, err := env.Get("MONGO_DATABASE", "relational_knowledge_engineering_platform")
+	database, err := getFromVaultOrEnv(vaultConfig.MongoSecretPath, "database", "MONGO_DATABASE", "relational_knowledge_engineering_platform")
 	if err != nil {
 		return mongoConfig, err
 	}
@@ -121,22 +193,56 @@ func loadMongoConfig() (MongoConfig, error) {
 	return mongoConfig, nil
 }
 
-func loadRedisConfig() (RedisConfig, error) {
+func loadRedisConfig(vaultConfig VaultSecretsConfig) (RedisConfig, error) {
 	var redisConfig RedisConfig
 
-	address, err := env.Get("REDIS_ADDRESS", "localhost:6379")
+	address, err := getFromVaultOrEnv(vaultConfig.RedisSecretPath, "address", "REDIS_ADDRESS", "localhost:6379")
 	if err != nil {
 		return redisConfig, err
 	}
 	redisConfig.Address = address
 
-	database, err := env.Get("REDIS_DATABASE", 0)
-	if err != nil {
-		return redisConfig, err
+	var database int
+	if vaultClient != nil && vaultConfig.RedisSecretPath != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		secretData, err := vaultClient.GetSecret(ctx, vaultConfig.RedisSecretPath)
+		if err == nil {
+			if value, ok := secretData["database"]; ok {
+				if intValue, ok := value.(float64); ok {
+					database = int(intValue)
+				} else if strValue, ok := value.(string); ok {
+					if parsed, parseErr := fmt.Sscanf(strValue, "%d", &database); parseErr != nil || parsed != 1 {
+						fmt.Printf("Warning: Could not parse database value from Vault, falling back to environment variable\n")
+						database, err = env.Get("REDIS_DATABASE", 0)
+						if err != nil {
+							return redisConfig, err
+						}
+					}
+				}
+			} else {
+				database, err = env.Get("REDIS_DATABASE", 0)
+				if err != nil {
+					return redisConfig, err
+				}
+			}
+		} else {
+			fmt.Printf("Warning: Could not get database from Vault path %s, falling back to environment variable\n", vaultConfig.RedisSecretPath)
+			database, err = env.Get("REDIS_DATABASE", 0)
+			if err != nil {
+				return redisConfig, err
+			}
+		}
+	} else {
+		database, err = env.Get("REDIS_DATABASE", 0)
+		if err != nil {
+			return redisConfig, err
+		}
 	}
 	redisConfig.Database = database
 
-	password, err := env.Get("REDIS_PASSWORD", "")
+	password, err := getFromVaultOrEnv(vaultConfig.RedisSecretPath, "password", "REDIS_PASSWORD", "")
 	if err != nil {
 		return redisConfig, err
 	}
@@ -166,19 +272,25 @@ func loadFeaturesConfig() (FeaturesConfig, error) {
 func loadConfig() (*Config, error) {
 	config := &Config{}
 
+	vaultConfig, err := loadVaultSecretsConfig()
+	if err != nil {
+		return nil, err
+	}
+	config.Vault = vaultConfig
+
 	serverConfig, err := loadServerConfig()
 	if err != nil {
 		return nil, err
 	}
 	config.Server = serverConfig
 
-	mongoConfig, err := loadMongoConfig()
+	mongoConfig, err := loadMongoConfig(vaultConfig)
 	if err != nil {
 		return nil, err
 	}
 	config.Mongo = mongoConfig
 
-	redisConfig, err := loadRedisConfig()
+	redisConfig, err := loadRedisConfig(vaultConfig)
 	if err != nil {
 		return nil, err
 	}

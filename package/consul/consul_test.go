@@ -185,7 +185,7 @@ func TestKVOperations_Validation(t *testing.T) {
 		{"get", "config/app/database", "", true},
 		{"get", "", "", false},
 		{"put", "config/app/database", "postgres://localhost", true},
-		{"put", "config/app/database", "", true}, // Empty value is valid
+		{"put", "config/app/database", "", true},
 		{"put", "", "some-value", false},
 		{"delete", "config/app/database", "", true},
 		{"delete", "", "", false},

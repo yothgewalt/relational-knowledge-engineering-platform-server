@@ -38,7 +38,7 @@ type ServiceInstance struct {
 	Port    int               `json:"port"`
 	Tags    []string          `json:"tags"`
 	Meta    map[string]string `json:"meta,omitempty"`
-	Health  string            `json:"health"` // passing, warning, critical
+	Health  string            `json:"health"`
 }
 
 type ConsulService interface {
@@ -58,7 +58,6 @@ type ConsulClient struct {
 }
 
 func NewConsulClient(config ConsulConfig) (*ConsulClient, error) {
-	// Create Consul API config
 	consulConfig := api.DefaultConfig()
 	consulConfig.Address = config.Address
 	consulConfig.Token = config.Token
@@ -67,7 +66,6 @@ func NewConsulClient(config ConsulConfig) (*ConsulClient, error) {
 		consulConfig.Datacenter = config.Datacenter
 	}
 
-	// Configure TLS if provided
 	if config.TLSConfig != nil {
 		consulConfig.TLSConfig = api.TLSConfig{
 			CAFile:             config.TLSConfig.CACert,
@@ -77,13 +75,11 @@ func NewConsulClient(config ConsulConfig) (*ConsulClient, error) {
 		}
 	}
 
-	// Create Consul client
 	client, err := api.NewClient(consulConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Consul client: %w", err)
 	}
 
-	// Test connection by getting agent info
 	if _, err := client.Agent().Self(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Consul: %w", err)
 	}
@@ -103,7 +99,6 @@ func (c *ConsulClient) HealthCheck(ctx context.Context) HealthStatus {
 		Address: c.config.Address,
 	}
 
-	// Check agent health
 	agent := c.client.Agent()
 	if _, err := agent.Self(); err != nil {
 		status.Connected = false
@@ -114,7 +109,6 @@ func (c *ConsulClient) HealthCheck(ctx context.Context) HealthStatus {
 	status.Connected = true
 	status.Latency = time.Since(start)
 
-	// Get leader information
 	if leader, err := c.client.Status().Leader(); err == nil {
 		status.Leader = leader
 	}
@@ -263,7 +257,6 @@ func (c *ConsulClient) GetHealthyServices(ctx context.Context, service string) (
 		return nil, err
 	}
 
-	// Filter for only healthy instances
 	var healthy []ServiceInstance
 	for _, instance := range instances {
 		if instance.Health == "passing" {
@@ -278,13 +271,11 @@ func (c *ConsulClient) WatchKey(ctx context.Context, key string, callback func(s
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Simple polling implementation - in production you might want to use Consul's blocking queries
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	var lastValue string
 
-	// Get initial value
 	if value, err := c.GetValue(ctx, key); err == nil {
 		lastValue = value
 		callback(value, nil)
@@ -311,8 +302,6 @@ func (c *ConsulClient) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Consul client doesn't require explicit closing
-	// Just clear the client reference
 	c.client = nil
 
 	return nil

@@ -23,11 +23,11 @@ type TLSConfig struct {
 }
 
 type HealthStatus struct {
-	Connected    bool          `json:"connected"`
-	Address      string        `json:"address"`
-	Authenticated bool         `json:"authenticated"`
-	Latency      time.Duration `json:"latency"`
-	Error        string        `json:"error,omitempty"`
+	Connected     bool          `json:"connected"`
+	Address       string        `json:"address"`
+	Authenticated bool          `json:"authenticated"`
+	Latency       time.Duration `json:"latency"`
+	Error         string        `json:"error,omitempty"`
 }
 
 type VaultService interface {
@@ -46,11 +46,9 @@ type VaultClient struct {
 }
 
 func NewVaultClient(config VaultConfig) (*VaultClient, error) {
-	// Create Vault API config
 	vaultConfig := api.DefaultConfig()
 	vaultConfig.Address = config.Address
 
-	// Configure TLS if provided
 	if config.TLSConfig != nil {
 		tlsConfig := &api.TLSConfig{
 			CACert:     config.TLSConfig.CACert,
@@ -63,20 +61,16 @@ func NewVaultClient(config VaultConfig) (*VaultClient, error) {
 		}
 	}
 
-	// Create Vault client
 	client, err := api.NewClient(vaultConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Vault client: %w", err)
 	}
 
-	// Set authentication token
 	client.SetToken(config.Token)
 
-	// Verify connection and authentication
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Test authentication by checking token info
 	if _, err := client.Auth().Token().LookupSelfWithContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to authenticate with Vault: %w", err)
 	}
@@ -96,7 +90,6 @@ func (v *VaultClient) HealthCheck(ctx context.Context) HealthStatus {
 		Address: v.config.Address,
 	}
 
-	// Check Vault health endpoint
 	_, err := v.client.Sys().HealthWithContext(ctx)
 	if err != nil {
 		status.Connected = false
@@ -108,7 +101,6 @@ func (v *VaultClient) HealthCheck(ctx context.Context) HealthStatus {
 	status.Connected = true
 	status.Latency = time.Since(start)
 
-	// Verify authentication
 	if _, err := v.client.Auth().Token().LookupSelfWithContext(ctx); err != nil {
 		status.Authenticated = false
 		status.Error = fmt.Sprintf("authentication failed: %v", err)
@@ -132,14 +124,12 @@ func (v *VaultClient) GetSecret(ctx context.Context, path string) (map[string]in
 		return nil, fmt.Errorf("secret not found at path: %s", path)
 	}
 
-	// Handle KV v2 format (data nested under "data" key)
 	if data, ok := secret.Data["data"]; ok {
 		if dataMap, ok := data.(map[string]interface{}); ok {
 			return dataMap, nil
 		}
 	}
 
-	// Return raw data for KV v1 or other secret engines
 	return secret.Data, nil
 }
 
@@ -147,7 +137,6 @@ func (v *VaultClient) PutSecret(ctx context.Context, path string, data map[strin
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	// For KV v2, wrap data under "data" key
 	secretData := map[string]interface{}{
 		"data": data,
 	}
@@ -164,7 +153,6 @@ func (v *VaultClient) ListSecrets(ctx context.Context, path string) ([]string, e
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	// Ensure path ends with / for listing
 	if path[len(path)-1] != '/' {
 		path += "/"
 	}
@@ -178,7 +166,6 @@ func (v *VaultClient) ListSecrets(ctx context.Context, path string) ([]string, e
 		return []string{}, nil
 	}
 
-	// Extract keys from response
 	if keys, ok := secret.Data["keys"]; ok {
 		if keysList, ok := keys.([]interface{}); ok {
 			result := make([]string, len(keysList))
@@ -210,8 +197,6 @@ func (v *VaultClient) Close() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	// Vault client doesn't require explicit closing
-	// Just clear the token for security
 	if v.client != nil {
 		v.client.ClearToken()
 	}
@@ -219,11 +204,7 @@ func (v *VaultClient) Close() error {
 	return nil
 }
 
-// Helper function to check if path is KV v2
 func (v *VaultClient) isKVv2(path string) (bool, string, error) {
-	// This is a simplified check - in production you might want to
-	// query the sys/mounts endpoint to determine the engine type
-	// For now, assume KV v2 if path starts with common patterns
 	if len(path) >= 7 && path[:7] == "secret/" {
 		return true, path, nil
 	}
