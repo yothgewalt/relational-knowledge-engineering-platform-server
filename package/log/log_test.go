@@ -270,3 +270,102 @@ func TestLogger_TimeFormat(t *testing.T) {
 		t.Error("timestamp should be either string or number")
 	}
 }
+
+func TestGetLogLevelFromEnv_ValidLevels(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected zerolog.Level
+	}{
+		{"trace level", "TRACE", zerolog.TraceLevel},
+		{"debug level", "DEBUG", zerolog.DebugLevel},
+		{"info level", "INFO", zerolog.InfoLevel},
+		{"warn level", "WARN", zerolog.WarnLevel},
+		{"warning level", "WARNING", zerolog.WarnLevel},
+		{"error level", "ERROR", zerolog.ErrorLevel},
+		{"fatal level", "FATAL", zerolog.FatalLevel},
+		{"panic level", "PANIC", zerolog.PanicLevel},
+		{"disabled level", "DISABLED", zerolog.Disabled},
+		{"no level", "NO", zerolog.Disabled},
+		{"off level", "OFF", zerolog.Disabled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("TEST_LOG_LEVEL", tt.envValue)
+			defer os.Unsetenv("TEST_LOG_LEVEL")
+
+			result := GetLogLevelFromEnv("TEST_LOG_LEVEL", zerolog.InfoLevel)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetLogLevelFromEnv_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected zerolog.Level
+	}{
+		{"lowercase debug", "debug", zerolog.DebugLevel},
+		{"mixed case info", "InFo", zerolog.InfoLevel},
+		{"lowercase warn", "warn", zerolog.WarnLevel},
+		{"mixed case error", "ErRoR", zerolog.ErrorLevel},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("TEST_LOG_LEVEL", tt.envValue)
+			defer os.Unsetenv("TEST_LOG_LEVEL")
+
+			result := GetLogLevelFromEnv("TEST_LOG_LEVEL", zerolog.InfoLevel)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetLogLevelFromEnv_EmptyValue(t *testing.T) {
+	os.Unsetenv("TEST_LOG_LEVEL")
+
+	defaultLevel := zerolog.WarnLevel
+	result := GetLogLevelFromEnv("TEST_LOG_LEVEL", defaultLevel)
+
+	if result != defaultLevel {
+		t.Errorf("expected default level %v, got %v", defaultLevel, result)
+	}
+}
+
+func TestGetLogLevelFromEnv_InvalidLevel(t *testing.T) {
+	os.Setenv("TEST_LOG_LEVEL", "INVALID_LEVEL")
+	defer os.Unsetenv("TEST_LOG_LEVEL")
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for invalid log level")
+		} else {
+			if !strings.Contains(r.(string), "INVALID_LEVEL") {
+				t.Errorf("panic message should contain invalid level, got: %v", r)
+			}
+		}
+	}()
+
+	GetLogLevelFromEnv("TEST_LOG_LEVEL", zerolog.InfoLevel)
+}
+
+func TestGetLogLevelFromEnv_Integration(t *testing.T) {
+	originalLevel := zerolog.GlobalLevel()
+	defer zerolog.SetGlobalLevel(originalLevel)
+
+	os.Setenv("LOG_LEVEL", "DEBUG")
+	defer os.Unsetenv("LOG_LEVEL")
+
+	_ = New()
+
+	if zerolog.GlobalLevel() != zerolog.DebugLevel {
+		t.Errorf("expected global level to be DebugLevel, got %v", zerolog.GlobalLevel())
+	}
+}
