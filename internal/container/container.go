@@ -14,6 +14,7 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/neo4j"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
@@ -37,6 +38,7 @@ type Container struct {
 	logger zerolog.Logger
 
 	mongoClient  *mongo.MongoService
+	neo4jClient  neo4j.Neo4jService
 	redisClient  redis.RedisService
 	resendClient resend.ResendService
 
@@ -104,6 +106,10 @@ func (c *Container) Bootstrap() error {
 
 	if err := c.initializeMongoDB(); err != nil {
 		return fmt.Errorf("failed to initialize MongoDB: %w", err)
+	}
+
+	if err := c.initializeNeo4j(); err != nil {
+		c.logger.Warn().Err(err).Msg("Neo4j initialization failed, graph database service will not be available")
 	}
 
 	if err := c.initializeRedis(); err != nil {
@@ -229,6 +235,77 @@ func (c *Container) initializeMongoDB() error {
 	return nil
 }
 
+func (c *Container) initializeNeo4j() error {
+	neo4jConfig := neo4j.Neo4jConfig{
+		URI:      c.config.Neo4j.URI,
+		Username: c.config.Neo4j.Username,
+		Password: c.config.Neo4j.Password,
+		Database: c.config.Neo4j.Database,
+	}
+
+	c.logger.Info().
+		Str("uri", neo4jConfig.URI).
+		Str("username", neo4jConfig.Username).
+		Str("database", neo4jConfig.Database).
+		Msg("Attempting Neo4j connection")
+
+	client, err := neo4j.NewNeo4jService(neo4jConfig)
+	if err != nil {
+		c.logger.Error().
+			Err(err).
+			Str("uri", neo4jConfig.URI).
+			Str("database", neo4jConfig.Database).
+			Msg("Failed to create Neo4j client")
+		return fmt.Errorf("failed to create Neo4j client: %w", err)
+	}
+
+	c.logger.Debug().Msg("Neo4j client created successfully, performing health check")
+
+	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer cancel()
+
+	health := client.HealthCheck(ctx)
+
+	c.logger.Info().
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("database_exists", health.DatabaseExists).
+		Dur("latency", health.Latency).
+		Str("uri", health.URI).
+		Str("database", health.Database).
+		Str("error", health.Error).
+		Msg("Neo4j health check completed")
+
+	if !health.Connected || !health.Authenticated || !health.DatabaseExists {
+		c.logger.Error().
+			Str("error", health.Error).
+			Str("uri", neo4jConfig.URI).
+			Str("database", neo4jConfig.Database).
+			Bool("connected", health.Connected).
+			Bool("authenticated", health.Authenticated).
+			Bool("database_exists", health.DatabaseExists).
+			Msg("Neo4j health check failed")
+		return fmt.Errorf("Neo4j health check failed: %s", health.Error)
+	}
+
+	c.neo4jClient = client
+	c.addShutdownFunc(func() error {
+		return client.Close()
+	})
+
+	c.logger.Info().
+		Str("uri", neo4jConfig.URI).
+		Str("database", neo4jConfig.Database).
+		Str("username", neo4jConfig.Username).
+		Dur("latency", health.Latency).
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("database_exists", health.DatabaseExists).
+		Msg("Neo4j connection fully established - connected, authenticated, and database accessible")
+
+	return nil
+}
+
 func (c *Container) initializeRedis() error {
 	redisConfig := redis.RedisConfig{
 		Address:  c.config.Redis.Address,
@@ -277,7 +354,8 @@ func (c *Container) initializeRedis() error {
 			Bool("authenticated", health.Authenticated).
 			Bool("database_exists", health.DatabaseExists).
 			Msg("Redis health check failed")
-		return fmt.Errorf("Redis health check failed: %s", health.Error)
+
+		return fmt.Errorf("redis health check failed: %s", health.Error)
 	}
 
 	c.redisClient = client
@@ -344,7 +422,6 @@ func (c *Container) initializeResend() error {
 
 	resendConfig := c.config.Resend
 
-	// Add debug logging to understand what API key we're getting
 	apiKeyMasked := ""
 	if resendConfig.ApiKey != "" {
 		if len(resendConfig.ApiKey) > 8 {
@@ -442,6 +519,12 @@ func (c *Container) GetRedisClient() redis.RedisService {
 	return c.redisClient
 }
 
+func (c *Container) GetNeo4jClient() neo4j.Neo4jService {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.neo4jClient
+}
+
 func (c *Container) GetResendClient() resend.ResendService {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -470,6 +553,27 @@ func (c *Container) HealthCheck() HealthStatus {
 
 		services = append(services, ServiceHealth{
 			Name:      "mongodb",
+			Status:    status,
+			Message:   message,
+			Timestamp: time.Now(),
+		})
+	}
+
+	if c.neo4jClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		health := c.neo4jClient.HealthCheck(ctx)
+		cancel()
+
+		status := "healthy"
+		message := ""
+		if !health.Connected || !health.Authenticated || !health.DatabaseExists {
+			status = "unhealthy"
+			message = health.Error
+			overallStatus = "unhealthy"
+		}
+
+		services = append(services, ServiceHealth{
+			Name:      "neo4j",
 			Status:    status,
 			Message:   message,
 			Timestamp: time.Now(),

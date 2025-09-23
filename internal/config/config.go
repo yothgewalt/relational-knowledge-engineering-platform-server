@@ -15,6 +15,7 @@ type Config struct {
 	Server       ServerConfig       `json:"server"`
 	Mongo        MongoConfig        `json:"mongo"`
 	Redis        RedisConfig        `json:"redis"`
+	Neo4j        Neo4jConfig        `json:"neo4j"`
 	Features     FeaturesConfig     `json:"features"`
 	VaultSecrets VaultSecretsConfig `json:"vault_secrets"`
 	Vault        VaultConfig        `json:"vault"`
@@ -24,6 +25,7 @@ type Config struct {
 type VaultSecretsConfig struct {
 	MongoSecretPath  string `json:"mongo_secret_path"`
 	RedisSecretPath  string `json:"redis_secret_path"`
+	Neo4jSecretPath  string `json:"neo4j_secret_path"`
 	ResendSecretPath string `json:"resend_secret_path"`
 }
 
@@ -45,6 +47,13 @@ type RedisConfig struct {
 	Address  string `json:"address"`
 	Database int    `json:"database"`
 	Password string `json:"password"`
+}
+
+type Neo4jConfig struct {
+	URI      string `json:"uri"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Database string `json:"database"`
 }
 
 type FeaturesConfig struct {
@@ -135,6 +144,12 @@ func loadVaultSecretsConfig() (VaultSecretsConfig, error) {
 		return vaultConfig, err
 	}
 	vaultConfig.RedisSecretPath = redisPath
+
+	neo4jPath, err := env.Get("VAULT_NEO4J_SECRET_PATH", "secret/database/neo4j")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.Neo4jSecretPath = neo4jPath
 
 	resendPath, err := env.Get("VAULT_RESEND_SECRET_PATH", "secret/email/resend")
 	if err != nil {
@@ -265,6 +280,40 @@ func loadRedisConfig(vaultConfig VaultSecretsConfig) (RedisConfig, error) {
 	return redisConfig, nil
 }
 
+func loadNeo4jConfig(vaultConfig VaultSecretsConfig) (Neo4jConfig, error) {
+	var neo4jConfig Neo4jConfig
+
+	logger.Debug().
+		Str("vault_path", vaultConfig.Neo4jSecretPath).
+		Msg("Loading Neo4j configuration")
+
+	uri, err := getFromVaultOrEnv(vaultConfig.Neo4jSecretPath, "uri", "NEO4J_URI", "bolt://localhost:7687")
+	if err != nil {
+		return neo4jConfig, err
+	}
+	neo4jConfig.URI = uri
+
+	username, err := getFromVaultOrEnv(vaultConfig.Neo4jSecretPath, "username", "NEO4J_USERNAME", "neo4j")
+	if err != nil {
+		return neo4jConfig, err
+	}
+	neo4jConfig.Username = username
+
+	password, err := getFromVaultOrEnv(vaultConfig.Neo4jSecretPath, "password", "NEO4J_PASSWORD", "")
+	if err != nil {
+		return neo4jConfig, err
+	}
+	neo4jConfig.Password = password
+
+	database, err := getFromVaultOrEnv(vaultConfig.Neo4jSecretPath, "database", "NEO4J_DATABASE", "neo4j")
+	if err != nil {
+		return neo4jConfig, err
+	}
+	neo4jConfig.Database = database
+
+	return neo4jConfig, nil
+}
+
 func loadFeaturesConfig() (FeaturesConfig, error) {
 	var featuresConfig FeaturesConfig
 
@@ -349,6 +398,12 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.Redis = redisConfig
+
+	neo4jConfig, err := loadNeo4jConfig(vaultSecretsConfig)
+	if err != nil {
+		return nil, err
+	}
+	config.Neo4j = neo4jConfig
 
 	featuresConfig, err := loadFeaturesConfig()
 	if err != nil {

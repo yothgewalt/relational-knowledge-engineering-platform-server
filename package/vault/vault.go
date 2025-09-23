@@ -115,7 +115,9 @@ func (v *VaultClient) GetSecret(ctx context.Context, path string) (map[string]in
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	secret, err := v.client.Logical().ReadWithContext(ctx, path)
+	kvv2Path := transformPathForKVv2(path)
+
+	secret, err := v.client.Logical().ReadWithContext(ctx, kvv2Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read secret at path %s: %w", path, err)
 	}
@@ -133,15 +135,31 @@ func (v *VaultClient) GetSecret(ctx context.Context, path string) (map[string]in
 	return secret.Data, nil
 }
 
+func transformPathForKVv2(path string) string {
+	if len(path) >= 7 && path[:7] == "secret/" {
+		return "secret/data/" + path[7:]
+	}
+	return path
+}
+
+func transformMetadataPathForKVv2(path string) string {
+	if len(path) >= 7 && path[:7] == "secret/" {
+		return "secret/metadata/" + path[7:]
+	}
+	return path
+}
+
 func (v *VaultClient) PutSecret(ctx context.Context, path string, data map[string]interface{}) error {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+
+	kvv2Path := transformPathForKVv2(path)
 
 	secretData := map[string]interface{}{
 		"data": data,
 	}
 
-	_, err := v.client.Logical().WriteWithContext(ctx, path, secretData)
+	_, err := v.client.Logical().WriteWithContext(ctx, kvv2Path, secretData)
 	if err != nil {
 		return fmt.Errorf("failed to write secret at path %s: %w", path, err)
 	}
@@ -157,7 +175,9 @@ func (v *VaultClient) ListSecrets(ctx context.Context, path string) ([]string, e
 		path += "/"
 	}
 
-	secret, err := v.client.Logical().ListWithContext(ctx, path)
+	kvv2Path := transformMetadataPathForKVv2(path)
+
+	secret, err := v.client.Logical().ListWithContext(ctx, kvv2Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list secrets at path %s: %w", path, err)
 	}
@@ -185,7 +205,10 @@ func (v *VaultClient) DeleteSecret(ctx context.Context, path string) error {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	_, err := v.client.Logical().DeleteWithContext(ctx, path)
+	// Transform path for KV v2 engine - use metadata path for deletion
+	kvv2Path := transformMetadataPathForKVv2(path)
+
+	_, err := v.client.Logical().DeleteWithContext(ctx, kvv2Path)
 	if err != nil {
 		return fmt.Errorf("failed to delete secret at path %s: %w", path, err)
 	}

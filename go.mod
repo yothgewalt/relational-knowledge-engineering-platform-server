@@ -7,6 +7,8 @@ require (
 	github.com/hashicorp/consul/api v1.32.3
 	github.com/hashicorp/vault/api v1.21.0
 	github.com/joho/godotenv v1.5.1
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.3
+	github.com/redis/go-redis/v9 v9.14.0
 	github.com/resend/resend-go/v2 v2.24.0
 	github.com/rs/zerolog v1.34.0
 	github.com/swaggo/swag v1.16.6
@@ -61,7 +63,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe // indirect
-	github.com/redis/go-redis/v9 v9.14.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
