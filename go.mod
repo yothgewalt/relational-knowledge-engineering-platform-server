@@ -6,6 +6,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.9
 	github.com/hashicorp/consul/api v1.32.3
 	github.com/hashicorp/vault/api v1.21.0
+	github.com/joho/godotenv v1.5.1
 	github.com/resend/resend-go/v2 v2.24.0
 	github.com/rs/zerolog v1.34.0
 	github.com/swaggo/swag v1.16.6

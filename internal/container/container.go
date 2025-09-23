@@ -82,17 +82,20 @@ func (c *Container) Bootstrap() error {
 		return fmt.Errorf("failed to initialize timezone: %w", err)
 	}
 
-	if err := c.initializeVault(); err != nil {
-		fmt.Printf("Warning: Vault initialization failed: %v\n", err)
-		fmt.Printf("Continuing with environment variable configuration...\n")
-	}
-
 	if err := c.initializeConfig(); err != nil {
 		return fmt.Errorf("failed to initialize config: %w", err)
 	}
 
 	if err := c.initializeLogging(); err != nil {
 		return fmt.Errorf("failed to initialize logging: %w", err)
+	}
+
+	if err := c.initializeVault(); err != nil {
+		c.logger.Warn().Err(err).Msg("Vault initialization failed, continuing with environment variable configuration")
+	}
+
+	if err := c.reloadConfigWithVault(); err != nil {
+		c.logger.Warn().Err(err).Msg("Failed to reload config with Vault, continuing with env vars")
 	}
 
 	c.logger.Info().Msg("Starting application bootstrap...")
@@ -102,9 +105,7 @@ func (c *Container) Bootstrap() error {
 	}
 
 	if err := c.initializeResend(); err != nil {
-		c.logger.Warn().Err(err).Msg("Resend initialization failed")
-		fmt.Printf("Warning: Resend initialization failed: %v\n", err)
-		fmt.Printf("Email service will not be available...\n")
+		c.logger.Warn().Err(err).Msg("Resend initialization failed, email service will not be available")
 	}
 
 	c.running = true
@@ -160,16 +161,47 @@ func (c *Container) initializeMongoDB() error {
 		Database: c.config.Mongo.Database,
 	}
 
+	c.logger.Info().
+		Str("address", mongoConfig.Address).
+		Str("username", mongoConfig.Username).
+		Str("database", mongoConfig.Database).
+		Msg("Attempting MongoDB connection")
+
 	client, err := mongo.NewMongoService(mongoConfig)
 	if err != nil {
+		c.logger.Error().
+			Err(err).
+			Str("address", mongoConfig.Address).
+			Str("database", mongoConfig.Database).
+			Msg("Failed to create MongoDB client")
 		return fmt.Errorf("failed to create MongoDB client: %w", err)
 	}
+
+	c.logger.Debug().Msg("MongoDB client created successfully, performing health check")
 
 	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
 	defer cancel()
 
 	health := client.HealthCheck(ctx)
-	if !health.Connected {
+	
+	c.logger.Info().
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("database_exists", health.DatabaseExists).
+		Dur("latency", health.Latency).
+		Str("database", health.Database).
+		Str("error", health.Error).
+		Msg("MongoDB health check completed")
+
+	if !health.Connected || !health.Authenticated || !health.DatabaseExists {
+		c.logger.Error().
+			Str("error", health.Error).
+			Str("address", mongoConfig.Address).
+			Str("database", mongoConfig.Database).
+			Bool("connected", health.Connected).
+			Bool("authenticated", health.Authenticated).
+			Bool("database_exists", health.DatabaseExists).
+			Msg("MongoDB health check failed")
 		return fmt.Errorf("MongoDB health check failed: %s", health.Error)
 	}
 
@@ -181,7 +213,12 @@ func (c *Container) initializeMongoDB() error {
 	c.logger.Info().
 		Str("address", mongoConfig.Address).
 		Str("database", mongoConfig.Database).
-		Msg("MongoDB connection established")
+		Str("username", mongoConfig.Username).
+		Dur("latency", health.Latency).
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("database_exists", health.DatabaseExists).
+		Msg("MongoDB connection fully established - connected, authenticated, and database accessible")
 
 	return nil
 }
@@ -193,7 +230,7 @@ func (c *Container) initializeVault() error {
 
 	vaultConfig := c.config.Vault
 	if vaultConfig.Address == "" || vaultConfig.Token == "" {
-		fmt.Printf("Vault configuration not provided, skipping Vault initialization\n")
+		c.logger.Info().Msg("Vault configuration not provided, skipping Vault initialization")
 		return nil
 	}
 
@@ -218,14 +255,10 @@ func (c *Container) initializeVault() error {
 	c.vaultClient = client
 	c.addShutdownFunc(client.Close)
 
-	if c.logger.GetLevel() != -1 {
-		c.logger.Info().
-			Str("address", vaultConfig.Address).
-			Bool("authenticated", health.Authenticated).
-			Msg("Vault connection established")
-	} else {
-		fmt.Printf("Vault connection established at %s (authenticated: %v)\n", vaultConfig.Address, health.Authenticated)
-	}
+	c.logger.Info().
+		Str("address", vaultConfig.Address).
+		Bool("authenticated", health.Authenticated).
+		Msg("Vault connection established")
 
 	return nil
 }
@@ -265,6 +298,23 @@ func (c *Container) initializeResend() error {
 	c.logger.Info().
 		Str("api_key", health.ApiKey).
 		Msg("Resend client initialized successfully")
+
+	return nil
+}
+
+func (c *Container) reloadConfigWithVault() error {
+	if c.vaultClient == nil {
+		c.logger.Info().Msg("Vault client not available, skipping config reload with Vault")
+		return nil
+	}
+
+	updatedConfig, err := config.ReloadWithVault(c.vaultClient)
+	if err != nil {
+		return fmt.Errorf("failed to reload config with Vault: %w", err)
+	}
+
+	c.config = updatedConfig
+	c.logger.Info().Msg("Config reloaded with Vault secrets")
 
 	return nil
 }
@@ -318,7 +368,7 @@ func (c *Container) HealthCheck() HealthStatus {
 
 		status := "healthy"
 		message := ""
-		if !health.Connected {
+		if !health.Connected || !health.Authenticated || !health.DatabaseExists {
 			status = "unhealthy"
 			message = health.Error
 			overallStatus = "unhealthy"

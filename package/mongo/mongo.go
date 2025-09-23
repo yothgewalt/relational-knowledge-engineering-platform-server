@@ -20,10 +20,12 @@ type MongoConfig struct {
 }
 
 type HealthStatus struct {
-	Connected bool          `json:"connected"`
-	Database  string        `json:"database"`
-	Latency   time.Duration `json:"latency"`
-	Error     string        `json:"error,omitempty"`
+	Connected      bool          `json:"connected"`
+	Database       string        `json:"database"`
+	Authenticated  bool          `json:"authenticated"`
+	DatabaseExists bool          `json:"database_exists"`
+	Latency        time.Duration `json:"latency"`
+	Error          string        `json:"error,omitempty"`
 }
 
 type MongoService struct {
@@ -108,13 +110,41 @@ func (s *MongoService) HealthCheck(ctx context.Context) HealthStatus {
 		Database: s.config.Database,
 	}
 
+	// Test basic connectivity and authentication
 	if err := s.client.Ping(ctx, readpref.Primary()); err != nil {
 		status.Connected = false
-		status.Error = err.Error()
+		status.Authenticated = false
+		status.DatabaseExists = false
+		status.Error = fmt.Sprintf("ping failed: %v", err)
+		status.Latency = time.Since(start)
 		return status
 	}
 
 	status.Connected = true
+
+	// Test authentication by running a simple admin command
+	var result bson.M
+	err := s.client.Database("admin").RunCommand(ctx, bson.D{{"ismaster", 1}}).Decode(&result)
+	if err != nil {
+		status.Authenticated = false
+		status.DatabaseExists = false
+		status.Error = fmt.Sprintf("authentication failed: %v", err)
+		status.Latency = time.Since(start)
+		return status
+	}
+
+	status.Authenticated = true
+
+	// Test database access by listing collections
+	_, err = s.database.ListCollectionNames(ctx, bson.M{})
+	if err != nil {
+		status.DatabaseExists = false
+		status.Error = fmt.Sprintf("database access failed: %v", err)
+		status.Latency = time.Since(start)
+		return status
+	}
+
+	status.DatabaseExists = true
 	status.Latency = time.Since(start)
 
 	return status

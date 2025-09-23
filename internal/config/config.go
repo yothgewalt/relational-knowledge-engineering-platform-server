@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/env"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
 )
 
@@ -66,6 +67,7 @@ var (
 	once        sync.Once
 	mu          sync.RWMutex
 	vaultClient vault.VaultService
+	logger      = log.New()
 )
 
 func Load() (*Config, error) {
@@ -115,7 +117,10 @@ func getFromVaultOrEnv(secretPath, key, envKey, defaultValue string) (string, er
 				}
 			}
 		}
-		fmt.Printf("Warning: Could not get %s from Vault path %s, falling back to environment variable\n", key, secretPath)
+		logger.Warn().
+			Str("key", key).
+			Str("vault_path", secretPath).
+			Msg("Could not get value from Vault, falling back to environment variable")
 	}
 
 	return env.Get(envKey, defaultValue)
@@ -226,7 +231,7 @@ func loadRedisConfig(vaultConfig VaultSecretsConfig) (RedisConfig, error) {
 					database = int(intValue)
 				} else if strValue, ok := value.(string); ok {
 					if parsed, parseErr := fmt.Sscanf(strValue, "%d", &database); parseErr != nil || parsed != 1 {
-						fmt.Printf("Warning: Could not parse database value from Vault, falling back to environment variable\n")
+						logger.Warn().Msg("Could not parse database value from Vault, falling back to environment variable")
 						database, err = env.Get("REDIS_DATABASE", 0)
 						if err != nil {
 							return redisConfig, err
@@ -240,7 +245,9 @@ func loadRedisConfig(vaultConfig VaultSecretsConfig) (RedisConfig, error) {
 				}
 			}
 		} else {
-			fmt.Printf("Warning: Could not get database from Vault path %s, falling back to environment variable\n", vaultConfig.RedisSecretPath)
+			logger.Warn().
+				Str("vault_path", vaultConfig.RedisSecretPath).
+				Msg("Could not get database from Vault, falling back to environment variable")
 			database, err = env.Get("REDIS_DATABASE", 0)
 			if err != nil {
 				return redisConfig, err
@@ -383,6 +390,23 @@ func Reload() (*Config, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
+	once = sync.Once{}
+	instance = nil
+
+	config, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	instance = config
+	return instance, nil
+}
+
+func ReloadWithVault(client vault.VaultService) (*Config, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	vaultClient = client
 	once = sync.Once{}
 	instance = nil
 
