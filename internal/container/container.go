@@ -50,15 +50,15 @@ type Container struct {
 	cancel        context.CancelFunc
 }
 
-type ContainerOptions struct {
+type Options struct {
 	DisableVault  bool
 	DisableConsul bool
 	Timezone      string
 }
 
-func NewContainer(opts *ContainerOptions) *Container {
+func New(opts *Options) *Container {
 	if opts == nil {
-		opts = &ContainerOptions{}
+		opts = &Options{}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

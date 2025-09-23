@@ -2,10 +2,16 @@ package main
 
 import (
 	_ "github.com/yothgewalt/relational-knowledge-engineering-platform-server/docs"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 )
 
 func main() {
-	cfg := config.MustLoad()
-	_ = cfg
+	opts := container.Options{Timezone: "Asia/Bangkok"}
+	c := container.New(&opts)
+
+	if err := c.Bootstrap(); err != nil {
+		panic(err)
+	}
+
+	c.WaitForShutdown()
 }

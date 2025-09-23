@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-func TestNewContainer(t *testing.T) {
+func TestNew(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	if container == nil {
-		t.Fatal("NewContainer should return a non-nil container")
+		t.Fatal("New should return a non-nil container")
 	}
 
 	if container.ctx == nil {
@@ -31,18 +31,18 @@ func TestNewContainer(t *testing.T) {
 	}
 }
 
-func TestNewContainerWithOptions(t *testing.T) {
+func TestNewWithOptions(t *testing.T) {
 	t.Parallel()
-	opts := &ContainerOptions{
+	opts := &Options{
 		DisableVault:  true,
 		DisableConsul: true,
 		Timezone:      "America/New_York",
 	}
 
-	container := NewContainer(opts)
+	container := New(opts)
 
 	if container == nil {
-		t.Fatal("NewContainer should return a non-nil container")
+		t.Fatal("New should return a non-nil container")
 	}
 
 	if container.ctx == nil {
@@ -52,7 +52,7 @@ func TestNewContainerWithOptions(t *testing.T) {
 
 func TestInitializeTimezone(t *testing.T) {
 	t.Run("default timezone", func(t *testing.T) {
-		container := NewContainer(nil)
+		container := New(nil)
 
 		t.Setenv("TZ", "")
 
@@ -67,7 +67,7 @@ func TestInitializeTimezone(t *testing.T) {
 	})
 
 	t.Run("custom valid timezone", func(t *testing.T) {
-		container := NewContainer(nil)
+		container := New(nil)
 
 		t.Setenv("TZ", "America/New_York")
 
@@ -83,7 +83,7 @@ func TestInitializeTimezone(t *testing.T) {
 }
 
 func TestInitializeTimezoneInvalid(t *testing.T) {
-	container := NewContainer(nil)
+	container := New(nil)
 
 	t.Setenv("TZ", "Invalid/Timezone")
 
@@ -95,7 +95,7 @@ func TestInitializeTimezoneInvalid(t *testing.T) {
 
 func TestInitializeLogging(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	err := container.initializeLogging()
 	if err != nil {
@@ -108,7 +108,7 @@ func TestInitializeLogging(t *testing.T) {
 }
 
 func TestContainerLifecycle(t *testing.T) {
-	container := NewContainer(nil)
+	container := New(nil)
 
 	if container.IsRunning() {
 		t.Error("Container should not be running initially")
@@ -126,7 +126,7 @@ func TestContainerLifecycle(t *testing.T) {
 
 func TestAddShutdownFunc(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	called := false
 	shutdownFunc := func() error {
@@ -152,7 +152,7 @@ func TestAddShutdownFunc(t *testing.T) {
 
 func TestHealthCheckEmpty(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	health := container.HealthCheck()
 
@@ -238,22 +238,22 @@ func TestHealthStatusStructure(t *testing.T) {
 	}
 }
 
-func TestContainerOptions(t *testing.T) {
+func TestOptions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name string
-		opts ContainerOptions
-		want ContainerOptions
+		opts Options
+		want Options
 	}{
 		{
 			name: "all options enabled",
-			opts: ContainerOptions{
+			opts: Options{
 				DisableVault:  true,
 				DisableConsul: true,
 				Timezone:      "Europe/London",
 			},
-			want: ContainerOptions{
+			want: Options{
 				DisableVault:  true,
 				DisableConsul: true,
 				Timezone:      "Europe/London",
@@ -261,8 +261,8 @@ func TestContainerOptions(t *testing.T) {
 		},
 		{
 			name: "default options",
-			opts: ContainerOptions{},
-			want: ContainerOptions{
+			opts: Options{},
+			want: Options{
 				DisableVault:  false,
 				DisableConsul: false,
 				Timezone:      "",
@@ -270,12 +270,12 @@ func TestContainerOptions(t *testing.T) {
 		},
 		{
 			name: "mixed options",
-			opts: ContainerOptions{
+			opts: Options{
 				DisableVault:  false,
 				DisableConsul: true,
 				Timezone:      "America/New_York",
 			},
-			want: ContainerOptions{
+			want: Options{
 				DisableVault:  false,
 				DisableConsul: true,
 				Timezone:      "America/New_York",
@@ -304,7 +304,7 @@ func TestContainerOptions(t *testing.T) {
 
 func TestGettersWithoutBootstrap(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	config := container.GetConfig()
 	if config != nil {
@@ -329,7 +329,7 @@ func TestGettersWithoutBootstrap(t *testing.T) {
 
 func TestShutdownWithoutRunning(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	err := container.Shutdown()
 	if err != nil {
@@ -339,7 +339,7 @@ func TestShutdownWithoutRunning(t *testing.T) {
 
 func TestShutdownWithErrors(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	container.addShutdownFunc(func() error {
 		return fmt.Errorf("shutdown error")
@@ -359,7 +359,7 @@ func TestShutdownWithErrors(t *testing.T) {
 
 func TestContextCancellation(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	select {
 	case <-container.ctx.Done():
@@ -382,7 +382,7 @@ func TestContextCancellation(t *testing.T) {
 
 func TestConcurrentAccess(t *testing.T) {
 	t.Parallel()
-	container := NewContainer(nil)
+	container := New(nil)
 
 	const numGoroutines = 10
 	done := make(chan bool, numGoroutines)
@@ -414,7 +414,7 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestEnvironmentVariableHandling(t *testing.T) {
-	container := NewContainer(nil)
+	container := New(nil)
 
 	t.Setenv("VAULT_ADDRESS", "")
 	t.Setenv("VAULT_TOKEN", "")
