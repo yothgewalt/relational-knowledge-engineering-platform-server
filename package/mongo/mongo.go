@@ -110,7 +110,6 @@ func (s *MongoService) HealthCheck(ctx context.Context) HealthStatus {
 		Database: s.config.Database,
 	}
 
-	// Test basic connectivity and authentication
 	if err := s.client.Ping(ctx, readpref.Primary()); err != nil {
 		status.Connected = false
 		status.Authenticated = false
@@ -122,9 +121,8 @@ func (s *MongoService) HealthCheck(ctx context.Context) HealthStatus {
 
 	status.Connected = true
 
-	// Test authentication by running a simple admin command
 	var result bson.M
-	err := s.client.Database("admin").RunCommand(ctx, bson.D{{"ismaster", 1}}).Decode(&result)
+	err := s.client.Database("admin").RunCommand(ctx, bson.D{{Key: "ismaster", Value: 1}}).Decode(&result)
 	if err != nil {
 		status.Authenticated = false
 		status.DatabaseExists = false
@@ -135,7 +133,6 @@ func (s *MongoService) HealthCheck(ctx context.Context) HealthStatus {
 
 	status.Authenticated = true
 
-	// Test database access by listing collections
 	_, err = s.database.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		status.DatabaseExists = false

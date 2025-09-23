@@ -12,13 +12,13 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig       `json:"server"`
-	Mongo       MongoConfig        `json:"mongo"`
-	Redis       RedisConfig        `json:"redis"`
-	Features    FeaturesConfig     `json:"features"`
+	Server       ServerConfig       `json:"server"`
+	Mongo        MongoConfig        `json:"mongo"`
+	Redis        RedisConfig        `json:"redis"`
+	Features     FeaturesConfig     `json:"features"`
 	VaultSecrets VaultSecretsConfig `json:"vault_secrets"`
-	Vault       VaultConfig        `json:"vault"`
-	Resend      ResendConfig       `json:"resend"`
+	Vault        VaultConfig        `json:"vault"`
+	Resend       ResendConfig       `json:"resend"`
 }
 
 type VaultSecretsConfig struct {
@@ -56,7 +56,6 @@ type VaultConfig struct {
 	Address string `json:"address"`
 	Token   string `json:"token"`
 }
-
 
 type ResendConfig struct {
 	ApiKey string `json:"api_key"`
@@ -117,10 +116,6 @@ func getFromVaultOrEnv(secretPath, key, envKey, defaultValue string) (string, er
 				}
 			}
 		}
-		logger.Warn().
-			Str("key", key).
-			Str("vault_path", secretPath).
-			Msg("Could not get value from Vault, falling back to environment variable")
 	}
 
 	return env.Get(envKey, defaultValue)
@@ -306,12 +301,15 @@ func loadVaultConfig() (VaultConfig, error) {
 	return vaultConfig, nil
 }
 
-
 func loadResendConfig(vaultSecretsConfig VaultSecretsConfig) (ResendConfig, error) {
 	var resendConfig ResendConfig
 
 	apiKey, err := getFromVaultOrEnv(vaultSecretsConfig.ResendSecretPath, "api_key", "RESEND_API_KEY", "")
 	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("vault_path", vaultSecretsConfig.ResendSecretPath).
+			Msg("Failed to load Resend API key")
 		return resendConfig, err
 	}
 	resendConfig.ApiKey = apiKey

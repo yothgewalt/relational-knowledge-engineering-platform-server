@@ -14,6 +14,7 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
 )
@@ -36,6 +37,7 @@ type Container struct {
 	logger zerolog.Logger
 
 	mongoClient  *mongo.MongoService
+	redisClient  redis.RedisService
 	resendClient resend.ResendService
 
 	vaultClient vault.VaultService
@@ -102,6 +104,10 @@ func (c *Container) Bootstrap() error {
 
 	if err := c.initializeMongoDB(); err != nil {
 		return fmt.Errorf("failed to initialize MongoDB: %w", err)
+	}
+
+	if err := c.initializeRedis(); err != nil {
+		c.logger.Warn().Err(err).Msg("Redis initialization failed, cache service will not be available")
 	}
 
 	if err := c.initializeResend(); err != nil {
@@ -183,7 +189,7 @@ func (c *Container) initializeMongoDB() error {
 	defer cancel()
 
 	health := client.HealthCheck(ctx)
-	
+
 	c.logger.Info().
 		Bool("connected", health.Connected).
 		Bool("authenticated", health.Authenticated).
@@ -219,6 +225,74 @@ func (c *Container) initializeMongoDB() error {
 		Bool("authenticated", health.Authenticated).
 		Bool("database_exists", health.DatabaseExists).
 		Msg("MongoDB connection fully established - connected, authenticated, and database accessible")
+
+	return nil
+}
+
+func (c *Container) initializeRedis() error {
+	redisConfig := redis.RedisConfig{
+		Address:  c.config.Redis.Address,
+		Password: c.config.Redis.Password,
+		Database: c.config.Redis.Database,
+	}
+
+	c.logger.Info().
+		Str("address", redisConfig.Address).
+		Int("database", redisConfig.Database).
+		Msg("Attempting Redis connection")
+
+	client, err := redis.NewRedisService(redisConfig)
+	if err != nil {
+		c.logger.Error().
+			Err(err).
+			Str("address", redisConfig.Address).
+			Int("database", redisConfig.Database).
+			Msg("Failed to create Redis client")
+		return fmt.Errorf("failed to create Redis client: %w", err)
+	}
+
+	c.logger.Debug().Msg("Redis client created successfully, performing health check")
+
+	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer cancel()
+
+	health := client.HealthCheck(ctx)
+
+	c.logger.Info().
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("database_exists", health.DatabaseExists).
+		Dur("latency", health.Latency).
+		Str("address", health.Address).
+		Int("database", health.Database).
+		Str("error", health.Error).
+		Msg("Redis health check completed")
+
+	if !health.Connected || !health.Authenticated || !health.DatabaseExists {
+		c.logger.Error().
+			Str("error", health.Error).
+			Str("address", redisConfig.Address).
+			Int("database", redisConfig.Database).
+			Bool("connected", health.Connected).
+			Bool("authenticated", health.Authenticated).
+			Bool("database_exists", health.DatabaseExists).
+			Msg("Redis health check failed")
+		return fmt.Errorf("Redis health check failed: %s", health.Error)
+	}
+
+	c.redisClient = client
+	c.addShutdownFunc(func() error {
+		return client.Close()
+	})
+
+	c.logger.Info().
+		Str("address", redisConfig.Address).
+		Int("database", redisConfig.Database).
+		Dur("latency", health.Latency).
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("database_exists", health.DatabaseExists).
+		Msg("Redis connection fully established - connected, authenticated, and database accessible")
 
 	return nil
 }
@@ -263,13 +337,28 @@ func (c *Container) initializeVault() error {
 	return nil
 }
 
-
 func (c *Container) initializeResend() error {
 	if c.config == nil {
 		return fmt.Errorf("config is not loaded")
 	}
 
 	resendConfig := c.config.Resend
+
+	// Add debug logging to understand what API key we're getting
+	apiKeyMasked := ""
+	if resendConfig.ApiKey != "" {
+		if len(resendConfig.ApiKey) > 8 {
+			apiKeyMasked = resendConfig.ApiKey[:4] + "***" + resendConfig.ApiKey[len(resendConfig.ApiKey)-4:]
+		} else {
+			apiKeyMasked = "***"
+		}
+	}
+
+	c.logger.Debug().
+		Str("api_key_masked", apiKeyMasked).
+		Bool("api_key_empty", resendConfig.ApiKey == "").
+		Msg("Resend configuration loaded from config")
+
 	if resendConfig.ApiKey == "" {
 		c.logger.Info().Msg("Resend API key not configured, skipping Resend initialization")
 		return nil
@@ -347,6 +436,11 @@ func (c *Container) GetVaultClient() vault.VaultService {
 	return c.vaultClient
 }
 
+func (c *Container) GetRedisClient() redis.RedisService {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.redisClient
+}
 
 func (c *Container) GetResendClient() resend.ResendService {
 	c.mu.RLock()
@@ -382,6 +476,27 @@ func (c *Container) HealthCheck() HealthStatus {
 		})
 	}
 
+	if c.redisClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		health := c.redisClient.HealthCheck(ctx)
+		cancel()
+
+		status := "healthy"
+		message := ""
+		if !health.Connected || !health.Authenticated || !health.DatabaseExists {
+			status = "unhealthy"
+			message = health.Error
+			overallStatus = "unhealthy"
+		}
+
+		services = append(services, ServiceHealth{
+			Name:      "redis",
+			Status:    status,
+			Message:   message,
+			Timestamp: time.Now(),
+		})
+	}
+
 	if c.vaultClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		health := c.vaultClient.HealthCheck(ctx)
@@ -404,7 +519,6 @@ func (c *Container) HealthCheck() HealthStatus {
 			Timestamp: time.Now(),
 		})
 	}
-
 
 	if c.resendClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
