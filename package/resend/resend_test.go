@@ -40,7 +40,7 @@ func TestResendConfig_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewResendClient(tt.config)
+			_, err := NewClient(tt.config)
 			if tt.valid && err != nil {
 				t.Errorf("expected valid config but got error: %v", err)
 			}
@@ -82,7 +82,7 @@ func TestResendClient_StructureAndMethods(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestEmailRequest_Validation(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestBulkEmail_Validation(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -376,8 +376,8 @@ func TestBulkEmail_Validation(t *testing.T) {
 			_, err := client.SendBulkEmails(ctx, tt.requests)
 
 			if tt.valid {
-				if err != nil && 
-					!strings.Contains(err.Error(), "API key is invalid") && 
+				if err != nil &&
+					!strings.Contains(err.Error(), "API key is invalid") &&
 					!strings.Contains(err.Error(), "The provided authorization grant is invalid, expired, revoked") {
 					t.Errorf("expected valid bulk request but got unexpected error: %v", err)
 				}
@@ -395,7 +395,7 @@ func TestApiKey_Masking(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestResendClient_Close(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestContext_Handling(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	_, err := NewResendClient(config)
+	_, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestConcurrentAccess(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -545,7 +545,7 @@ func TestHealthCheck_Structure(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -572,7 +572,7 @@ func TestEmailRequest_EdgeCases(t *testing.T) {
 		ApiKey: "re_test_key_1234567890",
 	}
 
-	client, err := NewResendClient(config)
+	client, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}

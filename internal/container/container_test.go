@@ -34,9 +34,8 @@ func TestNew(t *testing.T) {
 func TestNewWithOptions(t *testing.T) {
 	t.Parallel()
 	opts := &Options{
-		DisableVault:  true,
-		DisableConsul: true,
-		Timezone:      "America/New_York",
+		DisableVault: true,
+		Timezone:     "America/New_York",
 	}
 
 	container := New(opts)
@@ -249,36 +248,31 @@ func TestOptions(t *testing.T) {
 		{
 			name: "all options enabled",
 			opts: Options{
-				DisableVault:  true,
-				DisableConsul: true,
-				Timezone:      "Europe/London",
+				DisableVault: true,
+				Timezone:     "Europe/London",
 			},
 			want: Options{
-				DisableVault:  true,
-				DisableConsul: true,
-				Timezone:      "Europe/London",
+				DisableVault: true,
+				Timezone:     "Europe/London",
 			},
 		},
 		{
 			name: "default options",
 			opts: Options{},
 			want: Options{
-				DisableVault:  false,
-				DisableConsul: false,
-				Timezone:      "",
+				DisableVault: false,
+				Timezone:     "",
 			},
 		},
 		{
 			name: "mixed options",
 			opts: Options{
-				DisableVault:  false,
-				DisableConsul: true,
-				Timezone:      "America/New_York",
+				DisableVault: false,
+				Timezone:     "America/New_York",
 			},
 			want: Options{
-				DisableVault:  false,
-				DisableConsul: true,
-				Timezone:      "America/New_York",
+				DisableVault: false,
+				Timezone:     "America/New_York",
 			},
 		},
 	}
@@ -289,10 +283,6 @@ func TestOptions(t *testing.T) {
 
 			if tt.opts.DisableVault != tt.want.DisableVault {
 				t.Errorf("DisableVault = %v, want %v", tt.opts.DisableVault, tt.want.DisableVault)
-			}
-
-			if tt.opts.DisableConsul != tt.want.DisableConsul {
-				t.Errorf("DisableConsul = %v, want %v", tt.opts.DisableConsul, tt.want.DisableConsul)
 			}
 
 			if tt.opts.Timezone != tt.want.Timezone {
@@ -319,11 +309,6 @@ func TestGettersWithoutBootstrap(t *testing.T) {
 	vaultClient := container.GetVaultClient()
 	if vaultClient != nil {
 		t.Error("Vault client should be nil before bootstrap")
-	}
-
-	consulClient := container.GetConsulClient()
-	if consulClient != nil {
-		t.Error("Consul client should be nil before bootstrap")
 	}
 }
 
@@ -398,7 +383,6 @@ func TestConcurrentAccess(t *testing.T) {
 			for range 5 {
 				_ = container.GetMongoClient()
 				_ = container.GetVaultClient()
-				_ = container.GetConsulClient()
 			}
 		}()
 	}
@@ -428,10 +412,5 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 	err = container.initializeVault()
 	if err != nil {
 		t.Errorf("initializeVault should not error with missing env vars: %v", err)
-	}
-
-	err = container.initializeConsul()
-	if err != nil {
-		t.Errorf("initializeConsul should not error with missing env vars: %v", err)
 	}
 }

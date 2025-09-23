@@ -12,10 +12,9 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/consul"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/env"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
 )
 
@@ -36,10 +35,10 @@ type Container struct {
 	config *config.Config
 	logger zerolog.Logger
 
-	mongoClient *mongo.MongoService
+	mongoClient  *mongo.MongoService
+	resendClient resend.ResendService
 
-	vaultClient  vault.VaultService
-	consulClient consul.ConsulService
+	vaultClient vault.VaultService
 
 	startTime time.Time
 	mu        sync.RWMutex
@@ -52,7 +51,7 @@ type Container struct {
 
 type Options struct {
 	DisableVault  bool
-	DisableConsul bool
+	DisableResend bool
 	Timezone      string
 }
 
@@ -102,9 +101,10 @@ func (c *Container) Bootstrap() error {
 		return fmt.Errorf("failed to initialize MongoDB: %w", err)
 	}
 
-	if err := c.initializeConsul(); err != nil {
-		c.logger.Warn().Err(err).Msg("Consul initialization failed")
-		return fmt.Errorf("failed to initialize Consul: %w", err)
+	if err := c.initializeResend(); err != nil {
+		c.logger.Warn().Err(err).Msg("Resend initialization failed")
+		fmt.Printf("Warning: Resend initialization failed: %v\n", err)
+		fmt.Printf("Email service will not be available...\n")
 	}
 
 	c.running = true
@@ -187,27 +187,22 @@ func (c *Container) initializeMongoDB() error {
 }
 
 func (c *Container) initializeVault() error {
-	vaultAddr, err := env.Get("VAULT_ADDRESS", "localhost:8200")
-	if err != nil {
-		return fmt.Errorf("failed to get VAULT_ADDRESS: %w", err)
+	if c.config == nil {
+		return fmt.Errorf("config is not loaded")
 	}
 
-	vaultToken, err := env.Get("VAULT_TOKEN", "token")
-	if err != nil {
-		return fmt.Errorf("failed to get VAULT_TOKEN: %w", err)
-	}
-
-	if vaultAddr == "" || vaultToken == "" {
+	vaultConfig := c.config.Vault
+	if vaultConfig.Address == "" || vaultConfig.Token == "" {
 		fmt.Printf("Vault configuration not provided, skipping Vault initialization\n")
 		return nil
 	}
 
-	vaultConfig := vault.VaultConfig{
-		Address: vaultAddr,
-		Token:   vaultToken,
+	clientConfig := vault.VaultConfig{
+		Address: vaultConfig.Address,
+		Token:   vaultConfig.Token,
 	}
 
-	client, err := vault.NewVaultClient(vaultConfig)
+	client, err := vault.NewVaultClient(clientConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create Vault client: %w", err)
 	}
@@ -225,53 +220,51 @@ func (c *Container) initializeVault() error {
 
 	if c.logger.GetLevel() != -1 {
 		c.logger.Info().
-			Str("address", vaultAddr).
+			Str("address", vaultConfig.Address).
 			Bool("authenticated", health.Authenticated).
 			Msg("Vault connection established")
 	} else {
-		fmt.Printf("Vault connection established at %s (authenticated: %v)\n", vaultAddr, health.Authenticated)
+		fmt.Printf("Vault connection established at %s (authenticated: %v)\n", vaultConfig.Address, health.Authenticated)
 	}
 
 	return nil
 }
 
-func (c *Container) initializeConsul() error {
-	consulAddr := os.Getenv("CONSUL_ADDRESS")
-	consulToken := os.Getenv("CONSUL_TOKEN")
-	consulDatacenter := os.Getenv("CONSUL_DATACENTER")
 
-	if consulAddr == "" {
-		c.logger.Info().Msg("Consul configuration not provided, skipping Consul initialization")
+func (c *Container) initializeResend() error {
+	if c.config == nil {
+		return fmt.Errorf("config is not loaded")
+	}
+
+	resendConfig := c.config.Resend
+	if resendConfig.ApiKey == "" {
+		c.logger.Info().Msg("Resend API key not configured, skipping Resend initialization")
 		return nil
 	}
 
-	consulConfig := consul.ConsulConfig{
-		Address:    consulAddr,
-		Token:      consulToken,
-		Datacenter: consulDatacenter,
+	clientConfig := resend.ResendConfig{
+		ApiKey: resendConfig.ApiKey,
 	}
 
-	client, err := consul.NewConsulClient(consulConfig)
+	client, err := resend.NewClient(clientConfig)
 	if err != nil {
-		return fmt.Errorf("failed to create Consul client: %w", err)
+		return fmt.Errorf("failed to create Resend client: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
-	defer cancel()
+	healthCtx, healthCancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer healthCancel()
 
-	health := client.HealthCheck(ctx)
+	health := client.HealthCheck(healthCtx)
 	if !health.Connected {
-		return fmt.Errorf("consul health check failed: %s", health.Error)
+		return fmt.Errorf("resend health check failed: %s", health.Error)
 	}
 
-	c.consulClient = client
+	c.resendClient = client
 	c.addShutdownFunc(client.Close)
 
 	c.logger.Info().
-		Str("address", consulAddr).
-		Str("datacenter", consulDatacenter).
-		Str("leader", health.Leader).
-		Msg("Consul connection established")
+		Str("api_key", health.ApiKey).
+		Msg("Resend client initialized successfully")
 
 	return nil
 }
@@ -304,10 +297,11 @@ func (c *Container) GetVaultClient() vault.VaultService {
 	return c.vaultClient
 }
 
-func (c *Container) GetConsulClient() consul.ConsulService {
+
+func (c *Container) GetResendClient() resend.ResendService {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.consulClient
+	return c.resendClient
 }
 
 func (c *Container) HealthCheck() HealthStatus {
@@ -361,9 +355,10 @@ func (c *Container) HealthCheck() HealthStatus {
 		})
 	}
 
-	if c.consulClient != nil {
+
+	if c.resendClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		health := c.consulClient.HealthCheck(ctx)
+		health := c.resendClient.HealthCheck(ctx)
 		cancel()
 
 		status := "healthy"
@@ -377,7 +372,7 @@ func (c *Container) HealthCheck() HealthStatus {
 		}
 
 		services = append(services, ServiceHealth{
-			Name:      "consul",
+			Name:      "resend",
 			Status:    status,
 			Message:   message,
 			Timestamp: time.Now(),

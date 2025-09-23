@@ -21,16 +21,16 @@ type HealthStatus struct {
 }
 
 type EmailRequest struct {
-	From        string            `json:"from"`
-	To          []string          `json:"to"`
-	Subject     string            `json:"subject"`
-	Html        string            `json:"html,omitempty"`
-	Text        string            `json:"text,omitempty"`
-	Cc          []string          `json:"cc,omitempty"`
-	Bcc         []string          `json:"bcc,omitempty"`
-	ReplyTo     string            `json:"reply_to,omitempty"`
-	Tags        []resend.Tag      `json:"tags,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
+	From        string               `json:"from"`
+	To          []string             `json:"to"`
+	Subject     string               `json:"subject"`
+	Html        string               `json:"html,omitempty"`
+	Text        string               `json:"text,omitempty"`
+	Cc          []string             `json:"cc,omitempty"`
+	Bcc         []string             `json:"bcc,omitempty"`
+	ReplyTo     string               `json:"reply_to,omitempty"`
+	Tags        []resend.Tag         `json:"tags,omitempty"`
+	Headers     map[string]string    `json:"headers,omitempty"`
 	Attachments []*resend.Attachment `json:"attachments,omitempty"`
 }
 
@@ -51,7 +51,7 @@ type ResendClient struct {
 	mu     sync.RWMutex
 }
 
-func NewResendClient(config ResendConfig) (*ResendClient, error) {
+func NewClient(config ResendConfig) (*ResendClient, error) {
 	if config.ApiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}

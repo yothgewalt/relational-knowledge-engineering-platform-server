@@ -11,11 +11,13 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig       `json:"server"`
-	Mongo    MongoConfig        `json:"mongo"`
-	Redis    RedisConfig        `json:"redis"`
-	Features FeaturesConfig     `json:"features"`
-	Vault    VaultSecretsConfig `json:"vault"`
+	Server      ServerConfig       `json:"server"`
+	Mongo       MongoConfig        `json:"mongo"`
+	Redis       RedisConfig        `json:"redis"`
+	Features    FeaturesConfig     `json:"features"`
+	VaultSecrets VaultSecretsConfig `json:"vault_secrets"`
+	Vault       VaultConfig        `json:"vault"`
+	Resend      ResendConfig       `json:"resend"`
 }
 
 type VaultSecretsConfig struct {
@@ -47,6 +49,16 @@ type RedisConfig struct {
 type FeaturesConfig struct {
 	DebugMode      bool `json:"debug_mode"`
 	APIDocsEnabled bool `json:"api_docs_enabled"`
+}
+
+type VaultConfig struct {
+	Address string `json:"address"`
+	Token   string `json:"token"`
+}
+
+
+type ResendConfig struct {
+	ApiKey string `json:"api_key"`
 }
 
 var (
@@ -269,10 +281,47 @@ func loadFeaturesConfig() (FeaturesConfig, error) {
 	return featuresConfig, nil
 }
 
+func loadVaultConfig() (VaultConfig, error) {
+	var vaultConfig VaultConfig
+
+	address, err := env.Get("VAULT_ADDRESS", "localhost:8200")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.Address = address
+
+	token, err := env.Get("VAULT_TOKEN", "")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.Token = token
+
+	return vaultConfig, nil
+}
+
+
+func loadResendConfig(vaultSecretsConfig VaultSecretsConfig) (ResendConfig, error) {
+	var resendConfig ResendConfig
+
+	apiKey, err := getFromVaultOrEnv(vaultSecretsConfig.ResendSecretPath, "api_key", "RESEND_API_KEY", "")
+	if err != nil {
+		return resendConfig, err
+	}
+	resendConfig.ApiKey = apiKey
+
+	return resendConfig, nil
+}
+
 func loadConfig() (*Config, error) {
 	config := &Config{}
 
-	vaultConfig, err := loadVaultSecretsConfig()
+	vaultSecretsConfig, err := loadVaultSecretsConfig()
+	if err != nil {
+		return nil, err
+	}
+	config.VaultSecrets = vaultSecretsConfig
+
+	vaultConfig, err := loadVaultConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -284,13 +333,13 @@ func loadConfig() (*Config, error) {
 	}
 	config.Server = serverConfig
 
-	mongoConfig, err := loadMongoConfig(vaultConfig)
+	mongoConfig, err := loadMongoConfig(vaultSecretsConfig)
 	if err != nil {
 		return nil, err
 	}
 	config.Mongo = mongoConfig
 
-	redisConfig, err := loadRedisConfig(vaultConfig)
+	redisConfig, err := loadRedisConfig(vaultSecretsConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +350,12 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.Features = featuresConfig
+
+	resendConfig, err := loadResendConfig(vaultSecretsConfig)
+	if err != nil {
+		return nil, err
+	}
+	config.Resend = resendConfig
 
 	return config, nil
 }
