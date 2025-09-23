@@ -181,16 +181,22 @@ services:
         environment:
             CONSUL_BIND_INTERFACE: eth0
             CONSUL_CLIENT_INTERFACE: eth0
+            CONSUL_MANAGEMENT_TOKEN: d75ZwDfswgVr5m2LXbys/ZwscG2788AkkgOSPln0074=
+            CONSUL_AGENT_TOKEN: 7l2ESwSvmh8s5yPoHKg2AReUB1vAxaXXmSb9jkaLplc=
         ports:
             - "8500:8500"
             - "8600:8600/udp"
             - "8300:8300"
             - "8301:8301"
             - "8302:8302"
+            - "8502:8502"
         volumes:
             - consul_data:/consul/data
-        command: >
-            consul agent -server -bootstrap-expect=1 -client=0.0.0.0 -bind=0.0.0.0 -ui -ui-content-path=/ui/ -log-level=INFO -data-dir=/consul/data -datacenter=yoth
+            - consul_config:/consul/config
+            - ./configurations/consul-server.json:/consul/config/server.json:ro
+            - ./configurations/consul-init.sh:/consul/config/consul-init.sh:ro
+            - ./configurations/consul-entrypoint.sh:/consul/config/consul-entrypoint.sh:ro
+        command: /consul/config/consul-entrypoint.sh
         restart: always
         healthcheck:
             test: [ "CMD", "consul", "members" ]
