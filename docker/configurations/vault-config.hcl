@@ -9,8 +9,8 @@ listener "tcp" {
   tls_disable = "true"
 }
 
-api_addr = "http://kartoffel_vault:8200"
-cluster_addr = "http://kartoffel_vault:8201"
+api_addr = "http://vault:8200"
+cluster_addr = "http://vault:8201"
 ui = true
 
 # Disable mlock for development
