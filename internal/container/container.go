@@ -751,7 +751,7 @@ func (c *Container) initializeJWT() error {
 
 	c.jwtService = jwtService
 	c.logger.Info().Msg("JWT service initialized")
-	
+
 	return nil
 }
 
@@ -811,10 +811,11 @@ func (c *Container) initializeRouter() error {
 				"error": err.Error(),
 			})
 		},
+		DisableStartupMessage: true,
 	})
 
 	apiV1 := c.app.Group("/api/v1")
-	
+
 	if err := c.moduleManager.InitializeRoutes(apiV1); err != nil {
 		return fmt.Errorf("failed to initialize routes: %w", err)
 	}

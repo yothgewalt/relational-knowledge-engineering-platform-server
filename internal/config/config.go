@@ -301,7 +301,7 @@ func loadNeo4jConfig(vaultConfig VaultSecretsConfig) (Neo4jConfig, error) {
 		Str("vault_path", vaultConfig.Neo4jSecretPath).
 		Msg("Loading Neo4j configuration")
 
-	uri, err := getFromVaultOrEnv(vaultConfig.Neo4jSecretPath, "uri", "NEO4J_URI", "bolt://localhost:7687")
+	uri, err := getFromVaultOrEnv(vaultConfig.Neo4jSecretPath, "uri", "NEO4J_URI", "neo4j://localhost:7687")
 	if err != nil {
 		return neo4jConfig, err
 	}
