@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 )
 
 type AccountService interface {
-	// Account management methods
 	CreateAccount(ctx context.Context, req *CreateAccountRequest) (*AccountResponse, error)
 	GetAccountByID(ctx context.Context, id string) (*AccountResponse, error)
 	GetAccountByEmail(ctx context.Context, email string) (*AccountResponse, error)
@@ -25,7 +25,6 @@ type AccountService interface {
 	DeleteAccount(ctx context.Context, id string) error
 	ListAccounts(ctx context.Context, req *ListAccountsRequest) (*mongo.PaginatedResult[AccountResponse], error)
 
-	// Authentication methods
 	Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error)
 	Logout(ctx context.Context, token string) error
 	Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error)
@@ -40,11 +39,11 @@ type AccountService interface {
 }
 
 type accountService struct {
-	repository              AccountRepository
+	repository                AccountRepository
 	accountIdentityRepository AccountIdentityRepository
-	jwtService              *jwt.JWTService
-	resendService           resend.ResendService
-	fromEmail               string
+	jwtService                *jwt.JWTService
+	resendService             resend.ResendService
+	fromEmail                 string
 }
 
 func NewAccountService(
@@ -55,7 +54,34 @@ func NewAccountService(
 ) AccountService {
 	repository := NewAccountRepository(mongoService)
 	accountIdentityRepository := NewAccountIdentityRepository(mongoService)
-	
+
+	return &accountService{
+		repository:                repository,
+		accountIdentityRepository: accountIdentityRepository,
+		jwtService:                jwtService,
+		resendService:             resendService,
+		fromEmail:                 fromEmail,
+	}
+}
+
+// NewAccountServiceWithCache creates an account service with optional cache support
+func NewAccountServiceWithCache(
+	mongoService *mongo.MongoService,
+	cacheService redis.RedisService,
+	jwtService *jwt.JWTService,
+	resendService resend.ResendService,
+	fromEmail string,
+	cacheConfig HybridRepositoryConfig,
+) AccountService {
+	repository := NewAccountRepository(mongoService)
+
+	// Use hybrid repository that can leverage cache for OTP and Session management
+	accountIdentityRepository := NewHybridAccountIdentityRepository(
+		mongoService,
+		cacheService,
+		cacheConfig,
+	)
+
 	return &accountService{
 		repository:                repository,
 		accountIdentityRepository: accountIdentityRepository,
@@ -160,7 +186,7 @@ func (s *accountService) UpdateAccount(ctx context.Context, id string, req *Upda
 		if err != nil {
 			return nil, fmt.Errorf("failed to check username existence: %w", err)
 		}
-		
+
 		if exists {
 			existing, err := s.repository.GetByUsername(ctx, *req.Username)
 			if err != nil {
@@ -318,7 +344,7 @@ func (s *accountService) Login(ctx context.Context, req *LoginRequest, userAgent
 
 func (s *accountService) Logout(ctx context.Context, token string) error {
 	tokenHash := s.hashToken(token)
-	
+
 	err := s.accountIdentityRepository.DeactivateSession(ctx, tokenHash)
 	if err != nil {
 		return fmt.Errorf("failed to logout: %w", err)
@@ -668,4 +694,3 @@ func (s *accountService) hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return fmt.Sprintf("%x", hash)
 }
-

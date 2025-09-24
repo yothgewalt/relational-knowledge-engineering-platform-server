@@ -19,27 +19,13 @@ const (
 	SessionCollectionName = "sessions"
 )
 
-type AccountIdentityRepository interface {
-	CreateOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error)
-	GetOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error)
-	ValidateOTP(ctx context.Context, email string, purpose OTPPurpose, code string) (*OTP, error)
-	IncrementOTPAttempts(ctx context.Context, id primitive.ObjectID) error
-	DeleteOTP(ctx context.Context, email string, purpose OTPPurpose) error
-	CleanupExpiredOTPs(ctx context.Context) error
-
-	CreateSession(ctx context.Context, session *Session) (*Session, error)
-	GetSessionByToken(ctx context.Context, tokenHash string) (*Session, error)
-	GetSessionsByAccountID(ctx context.Context, accountID string) ([]*Session, error)
-	UpdateSessionLastUsed(ctx context.Context, id primitive.ObjectID) error
-	DeactivateSession(ctx context.Context, tokenHash string) error
-	DeactivateAllUserSessions(ctx context.Context, accountID string) error
-	CleanupExpiredSessions(ctx context.Context) error
-}
 
 type accountIdentityRepository struct {
 	otpRepo     mongo.Repository[OTP]
 	sessionRepo mongo.Repository[Session]
 }
+
+var _ AccountIdentityRepository = (*accountIdentityRepository)(nil)
 
 func NewAccountIdentityRepository(mongoService *mongo.MongoService) AccountIdentityRepository {
 	return &accountIdentityRepository{

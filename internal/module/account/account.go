@@ -6,6 +6,7 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 )
 
@@ -18,6 +19,17 @@ func NewService(
 	return NewAccountService(mongoService, jwtService, resendService, fromEmail)
 }
 
+func NewServiceWithCache(
+	mongoService *mongo.MongoService,
+	cacheService redis.RedisService,
+	jwtService *jwt.JWTService,
+	resendService resend.ResendService,
+	fromEmail string,
+	cacheConfig HybridRepositoryConfig,
+) AccountService {
+	return NewAccountServiceWithCache(mongoService, cacheService, jwtService, resendService, fromEmail, cacheConfig)
+}
+
 func NewHandler(service AccountService) *AccountHandler {
 	return NewAccountHandler(service)
 }
@@ -28,7 +40,9 @@ func NewMiddleware(service AccountService) *AccountMiddleware {
 
 type AccountModule struct {
 	container.BaseModule
-	fromEmail string
+	fromEmail          string
+	useCacheForOTP     bool
+	useCacheForSession bool
 }
 
 func NewAccountModule(fromEmail string) *AccountModule {
@@ -40,9 +54,18 @@ func NewAccountModule(fromEmail string) *AccountModule {
 	)
 
 	return &AccountModule{
-		BaseModule: base,
-		fromEmail:  fromEmail,
+		BaseModule:         base,
+		fromEmail:          fromEmail,
+		useCacheForOTP:     true, // Default to using cache for OTP
+		useCacheForSession: true, // Default to using cache for sessions
 	}
+}
+
+// WithCacheConfig configures cache usage for the account module
+func (m *AccountModule) WithCacheConfig(useCacheForOTP, useCacheForSession bool) *AccountModule {
+	m.useCacheForOTP = useCacheForOTP
+	m.useCacheForSession = useCacheForSession
+	return m
 }
 
 func (m *AccountModule) RegisterServices(registry *container.ServiceRegistry) error {
@@ -61,7 +84,27 @@ func (m *AccountModule) RegisterServices(registry *container.ServiceRegistry) er
 		return container.ServiceNotFoundError{ServiceName: "resend"}
 	}
 
-	accountService := NewService(mongoService, jwtService, resendService, m.fromEmail)
+	var accountService AccountService
+
+	cacheService := registry.GetRedis()
+	if cacheService != nil && (m.useCacheForOTP || m.useCacheForSession) {
+		cacheConfig := HybridRepositoryConfig{
+			UseCacheForOTP:     m.useCacheForOTP,
+			UseCacheForSession: m.useCacheForSession,
+			EnableFallback:     true,
+		}
+
+		accountService = NewServiceWithCache(
+			mongoService,
+			cacheService,
+			jwtService,
+			resendService,
+			m.fromEmail,
+			cacheConfig,
+		)
+	} else {
+		accountService = NewService(mongoService, jwtService, resendService, m.fromEmail)
+	}
 
 	if err := registry.RegisterService("account", accountService); err != nil {
 		return err
