@@ -161,7 +161,7 @@ func GetPasswordResetTemplate(otp string) EmailTemplate {
 	return EmailTemplate{
 		Subject:  "Password Reset Code",
 		HtmlBody: "<h1>Password Reset</h1><p>Your password reset code is: <strong>" + otp + "</strong></p><p>This code will expire in 5 minutes.</p>",
-		TextBody: "Your password reset code is: " + otp + ". This code will expire in 5 minutes.",
+		TextBody: "Password Reset - Your password reset code is: " + otp + ". This code will expire in 5 minutes.",
 	}
 }
 
@@ -169,6 +169,6 @@ func GetPasswordChangeConfirmationTemplate() EmailTemplate {
 	return EmailTemplate{
 		Subject:  "Password Changed Successfully",
 		HtmlBody: "<h1>Password Changed</h1><p>Your password has been successfully changed. If you did not make this change, please contact support immediately.</p>",
-		TextBody: "Your password has been successfully changed. If you did not make this change, please contact support immediately.",
+		TextBody: "Password Changed - Your password has been successfully changed. If you did not make this change, please contact support immediately.",
 	}
 }

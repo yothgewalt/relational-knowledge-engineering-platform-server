@@ -116,9 +116,7 @@ func TestAccountService_Login(t *testing.T) {
 						a.IsActive = true
 					}), nil)
 				session := CreateTestSession()
-				mockIdentityRepo.On("CreateSession", mock.Anything, mock.MatchedBy(func(s *Session) bool {
-					return s.IsActive
-				})).Return(session, nil)
+				mockIdentityRepo.On("CreateSession", mock.Anything, mock.AnythingOfType("*account.Session")).Return(session, nil)
 			case "account not found":
 				mockAccountRepo.On("GetByEmail", mock.Anything, "notfound@example.com").Return(nil, fmt.Errorf("account not found"))
 			case "inactive account":

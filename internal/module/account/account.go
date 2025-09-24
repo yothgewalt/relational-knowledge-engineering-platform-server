@@ -6,7 +6,6 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 )
 
@@ -16,19 +15,9 @@ func NewService(
 	resendService resend.ResendService,
 	fromEmail string,
 ) AccountService {
-	return NewAccountService(mongoService, jwtService, resendService, fromEmail)
+	return NewAccountService(mongoService, nil, jwtService, resendService, fromEmail)
 }
 
-func NewServiceWithCache(
-	mongoService *mongo.MongoService,
-	cacheService redis.RedisService,
-	jwtService *jwt.JWTService,
-	resendService resend.ResendService,
-	fromEmail string,
-	cacheConfig HybridRepositoryConfig,
-) AccountService {
-	return NewAccountServiceWithCache(mongoService, cacheService, jwtService, resendService, fromEmail, cacheConfig)
-}
 
 func NewHandler(service AccountService) *AccountHandler {
 	return NewAccountHandler(service)
@@ -86,24 +75,7 @@ func (m *AccountModule) RegisterServices(registry *container.ServiceRegistry) er
 	var accountService AccountService
 
 	cacheService := registry.GetRedis()
-	if cacheService != nil && (m.useCacheForOTP || m.useCacheForSession) {
-		cacheConfig := HybridRepositoryConfig{
-			UseCacheForOTP:     m.useCacheForOTP,
-			UseCacheForSession: m.useCacheForSession,
-			EnableFallback:     true,
-		}
-
-		accountService = NewServiceWithCache(
-			mongoService,
-			cacheService,
-			jwtService,
-			resendService,
-			m.fromEmail,
-			cacheConfig,
-		)
-	} else {
-		accountService = NewService(mongoService, jwtService, resendService, m.fromEmail)
-	}
+	accountService = NewAccountService(mongoService, cacheService, jwtService, resendService, m.fromEmail)
 
 	if err := registry.RegisterService("account", accountService); err != nil {
 		return err

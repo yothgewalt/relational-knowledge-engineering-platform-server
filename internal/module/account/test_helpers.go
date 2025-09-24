@@ -310,15 +310,16 @@ func CreateTestAccount(overrides ...func(*Account)) *Account {
 	now := time.Now()
 
 	account := &Account{
-		ID:        objectID,
-		Email:     "test@example.com",
-		Username:  "testuser",
-		FirstName: "Test",
-		LastName:  "User",
-		Avatar:    "https://example.com/avatar.jpg",
-		IsActive:  true,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:           objectID,
+		Email:        "test@example.com",
+		Username:     "testuser",
+		FirstName:    "Test",
+		LastName:     "User",
+		Avatar:       "https://example.com/avatar.jpg",
+		PasswordHash: "$argon2id$v=19$m=65536,t=3,p=2$6zdIgTICAKO9VDMoJORgfQ==$9eg9jOoyir2PSlAvYRjPmK4lWXcShuDSWRmKEu/U0r4=", // password123
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	for _, override := range overrides {
@@ -456,15 +457,15 @@ func CreateTestSession(overrides ...func(*Session)) *Session {
 	now := time.Now()
 
 	session := &Session{
-		ID:          objectID,
-		AccountID:   primitive.NewObjectID().Hex(),
-		TokenHash:   "hashedtoken123",
-		IsActive:    true,
-		ExpiresAt:   now.Add(24 * time.Hour),
-		CreatedAt:   now,
-		LastUsedAt:  now,
-		UserAgent:   "Mozilla/5.0 (Test Browser)",
-		IPAddress:   "192.168.1.1",
+		ID:         objectID,
+		AccountID:  primitive.NewObjectID().Hex(),
+		TokenHash:  "hashedtoken123",
+		IsActive:   true,
+		ExpiresAt:  now.Add(24 * time.Hour),
+		CreatedAt:  now,
+		LastUsedAt: now,
+		UserAgent:  "Mozilla/5.0 (Test Browser)",
+		IPAddress:  "192.168.1.1",
 	}
 
 	for _, override := range overrides {

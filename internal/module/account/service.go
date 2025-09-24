@@ -48,37 +48,28 @@ type accountService struct {
 
 func NewAccountService(
 	mongoService *mongo.MongoService,
-	jwtService *jwt.JWTService,
-	resendService resend.ResendService,
-	fromEmail string,
-) AccountService {
-	repository := NewAccountRepository(mongoService)
-	accountIdentityRepository := NewAccountIdentityRepository(mongoService)
-
-	return &accountService{
-		repository:                repository,
-		accountIdentityRepository: accountIdentityRepository,
-		jwtService:                jwtService,
-		resendService:             resendService,
-		fromEmail:                 fromEmail,
-	}
-}
-
-func NewAccountServiceWithCache(
-	mongoService *mongo.MongoService,
 	cacheService redis.RedisService,
 	jwtService *jwt.JWTService,
 	resendService resend.ResendService,
 	fromEmail string,
-	cacheConfig HybridRepositoryConfig,
 ) AccountService {
 	repository := NewAccountRepository(mongoService)
 
-	accountIdentityRepository := NewHybridAccountIdentityRepository(
-		mongoService,
-		cacheService,
-		cacheConfig,
-	)
+	var accountIdentityRepository AccountIdentityRepository
+	if cacheService != nil {
+		cacheConfig := HybridRepositoryConfig{
+			UseCacheForOTP:     true,
+			UseCacheForSession: true,
+			EnableFallback:     true,
+		}
+		accountIdentityRepository = NewHybridAccountIdentityRepository(
+			mongoService,
+			cacheService,
+			cacheConfig,
+		)
+	} else {
+		accountIdentityRepository = NewAccountIdentityRepository(mongoService)
+	}
 
 	return &accountService{
 		repository:                repository,

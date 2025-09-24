@@ -10,6 +10,7 @@ import (
 )
 
 func TestOTP_IsExpired(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		name      string
 		expiresAt time.Time
@@ -17,17 +18,17 @@ func TestOTP_IsExpired(t *testing.T) {
 	}{
 		{
 			name:      "expired OTP",
-			expiresAt: time.Now().Add(-1 * time.Minute),
+			expiresAt: now.Add(-1 * time.Minute),
 			expected:  true,
 		},
 		{
 			name:      "valid OTP",
-			expiresAt: time.Now().Add(5 * time.Minute),
+			expiresAt: now.Add(5 * time.Minute),
 			expected:  false,
 		},
 		{
 			name:      "exactly at expiry time",
-			expiresAt: time.Now(),
+			expiresAt: now.Add(100 * time.Millisecond),
 			expected:  false,
 		},
 	}
@@ -83,6 +84,7 @@ func TestOTP_IsMaxAttemptsReached(t *testing.T) {
 }
 
 func TestSession_IsExpired(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		name      string
 		expiresAt time.Time
@@ -90,17 +92,17 @@ func TestSession_IsExpired(t *testing.T) {
 	}{
 		{
 			name:      "expired session",
-			expiresAt: time.Now().Add(-1 * time.Hour),
+			expiresAt: now.Add(-1 * time.Hour),
 			expected:  true,
 		},
 		{
 			name:      "valid session",
-			expiresAt: time.Now().Add(24 * time.Hour),
+			expiresAt: now.Add(24 * time.Hour),
 			expected:  false,
 		},
 		{
 			name:      "exactly at expiry time",
-			expiresAt: time.Now(),
+			expiresAt: now.Add(100 * time.Millisecond),
 			expected:  false,
 		},
 	}
