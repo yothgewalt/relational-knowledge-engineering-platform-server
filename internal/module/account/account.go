@@ -4,11 +4,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 )
 
-func NewService(mongoService *mongo.MongoService) AccountService {
-	return NewAccountService(mongoService)
+func NewService(
+	mongoService *mongo.MongoService,
+	jwtService *jwt.JWTService,
+	resendService resend.ResendService,
+	fromEmail string,
+) AccountService {
+	return NewAccountService(mongoService, jwtService, resendService, fromEmail)
 }
 
 func NewHandler(service AccountService) *AccountHandler {
@@ -21,18 +28,20 @@ func NewMiddleware(service AccountService) *AccountMiddleware {
 
 type AccountModule struct {
 	container.BaseModule
+	fromEmail string
 }
 
-func NewAccountModule() *AccountModule {
+func NewAccountModule(fromEmail string) *AccountModule {
 	base := container.NewBaseModule(
 		"account",
 		"1.0.0",
-		"Account management module",
+		"Account management and authentication module",
 		[]string{},
 	)
 
 	return &AccountModule{
 		BaseModule: base,
+		fromEmail:  fromEmail,
 	}
 }
 
@@ -42,7 +51,17 @@ func (m *AccountModule) RegisterServices(registry *container.ServiceRegistry) er
 		return container.ServiceNotFoundError{ServiceName: "mongo"}
 	}
 
-	accountService := NewService(mongoService)
+	jwtService := registry.GetJWT()
+	if jwtService == nil {
+		return container.ServiceNotFoundError{ServiceName: "jwt"}
+	}
+
+	resendService := registry.GetResend()
+	if resendService == nil {
+		return container.ServiceNotFoundError{ServiceName: "resend"}
+	}
+
+	accountService := NewService(mongoService, jwtService, resendService, m.fromEmail)
 
 	if err := registry.RegisterService("account", accountService); err != nil {
 		return err
@@ -61,53 +80,33 @@ func (m *AccountModule) RegisterRoutes(router fiber.Router, registry *container.
 	handler := NewHandler(accountService)
 	middleware := NewMiddleware(accountService)
 
-	identityServiceInterface, err := registry.GetService("identity")
-	if err != nil {
-		return err
-	}
-
-	identityService, ok := identityServiceInterface.(interface {
-		ValidateToken(ctx interface{}, token string) (interface{}, error)
-	})
-	if !ok {
-		return container.ServiceNotFoundError{ServiceName: "identity with ValidateToken"}
-	}
-
-	authMiddleware := &AuthenticationMiddleware{identityService: identityService}
-
 	accounts := router.Group("/accounts")
 
-	accounts.Get("/", authMiddleware.RequireAuth(), handler.ListAccounts)
+	accounts.Post("/login", handler.Login)
+	accounts.Post("/register", handler.Register)
+	accounts.Post("/logout", middleware.RequireAuth(), handler.Logout)
+	accounts.Post("/refresh", handler.RefreshToken)
+	accounts.Post("/validate", handler.ValidateToken)
+	accounts.Post("/forgot-password", handler.ForgotPassword)
+	accounts.Post("/reset-password", handler.ResetPassword)
+	accounts.Post("/verify-email", handler.VerifyEmail)
+	accounts.Post("/resend-verification", handler.ResendEmailVerification)
+	accounts.Post("/change-password", middleware.RequireAuth(), handler.ChangePassword)
+
+	accounts.Get("/", middleware.RequireAuth(), handler.ListAccounts)
 	accounts.Post("/", handler.CreateAccount)
+	accounts.Get("/me", middleware.RequireAuth(), handler.GetMe)
 
-	accounts.Get("/email", authMiddleware.OptionalAuth(), handler.GetAccountByEmail)
-	accounts.Get("/username", authMiddleware.OptionalAuth(), handler.GetAccountByUsername)
+	accounts.Get("/email", middleware.OptionalAuth(), handler.GetAccountByEmail)
+	accounts.Get("/username", middleware.OptionalAuth(), handler.GetAccountByUsername)
 
-	accounts.Get("/:id", authMiddleware.RequireAuth(), middleware.ValidateAccountOwnership(), handler.GetAccount)
-	accounts.Put("/:id", authMiddleware.RequireAuth(), middleware.ValidateAccountOwnership(), handler.UpdateAccount)
-	accounts.Delete("/:id", authMiddleware.RequireAuth(), middleware.ValidateAccountOwnership(), handler.DeleteAccount)
+	accounts.Get("/:id", middleware.RequireAuth(), middleware.ValidateAccountOwnership(), handler.GetAccount)
+	accounts.Put("/:id", middleware.RequireAuth(), middleware.ValidateAccountOwnership(), handler.UpdateAccount)
+	accounts.Delete("/:id", middleware.RequireAuth(), middleware.ValidateAccountOwnership(), handler.DeleteAccount)
 
 	return nil
 }
 
 func (m *AccountModule) RegisterMiddleware(registry *container.ServiceRegistry) error {
 	return nil
-}
-
-type AuthenticationMiddleware struct {
-	identityService interface {
-		ValidateToken(ctx interface{}, token string) (interface{}, error)
-	}
-}
-
-func (m *AuthenticationMiddleware) RequireAuth() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		return c.Next()
-	}
-}
-
-func (m *AuthenticationMiddleware) OptionalAuth() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		return c.Next()
-	}
 }

@@ -1,9 +1,8 @@
-package identity
+package account
 
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"fmt"
 	"math/big"
 	"time"
@@ -20,7 +19,7 @@ const (
 	SessionCollectionName = "sessions"
 )
 
-type IdentityRepository interface {
+type AccountIdentityRepository interface {
 	CreateOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error)
 	GetOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error)
 	ValidateOTP(ctx context.Context, email string, purpose OTPPurpose, code string) (*OTP, error)
@@ -37,19 +36,19 @@ type IdentityRepository interface {
 	CleanupExpiredSessions(ctx context.Context) error
 }
 
-type identityRepository struct {
+type accountIdentityRepository struct {
 	otpRepo     mongo.Repository[OTP]
 	sessionRepo mongo.Repository[Session]
 }
 
-func NewIdentityRepository(mongoService *mongo.MongoService) IdentityRepository {
-	return &identityRepository{
+func NewAccountIdentityRepository(mongoService *mongo.MongoService) AccountIdentityRepository {
+	return &accountIdentityRepository{
 		otpRepo:     mongo.NewRepository[OTP](mongoService, OTPCollectionName),
 		sessionRepo: mongo.NewRepository[Session](mongoService, SessionCollectionName),
 	}
 }
 
-func (r *identityRepository) CreateOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error) {
+func (r *accountIdentityRepository) CreateOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error) {
 	r.DeleteOTP(ctx, email, purpose)
 
 	code, err := generateOTPCode()
@@ -76,7 +75,7 @@ func (r *identityRepository) CreateOTP(ctx context.Context, email string, purpos
 	return result, nil
 }
 
-func (r *identityRepository) GetOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error) {
+func (r *accountIdentityRepository) GetOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error) {
 	filter := bson.M{
 		"email":   email,
 		"purpose": purpose,
@@ -94,7 +93,7 @@ func (r *identityRepository) GetOTP(ctx context.Context, email string, purpose O
 	return otp, nil
 }
 
-func (r *identityRepository) ValidateOTP(ctx context.Context, email string, purpose OTPPurpose, code string) (*OTP, error) {
+func (r *accountIdentityRepository) ValidateOTP(ctx context.Context, email string, purpose OTPPurpose, code string) (*OTP, error) {
 	otp, err := r.GetOTP(ctx, email, purpose)
 	if err != nil {
 		return nil, err
@@ -122,7 +121,7 @@ func (r *identityRepository) ValidateOTP(ctx context.Context, email string, purp
 	return otp, nil
 }
 
-func (r *identityRepository) IncrementOTPAttempts(ctx context.Context, id primitive.ObjectID) error {
+func (r *accountIdentityRepository) IncrementOTPAttempts(ctx context.Context, id primitive.ObjectID) error {
 	filter := bson.M{"_id": id}
 	update := bson.M{
 		"$inc": bson.M{"attempts": 1},
@@ -137,7 +136,7 @@ func (r *identityRepository) IncrementOTPAttempts(ctx context.Context, id primit
 	return nil
 }
 
-func (r *identityRepository) DeleteOTP(ctx context.Context, email string, purpose OTPPurpose) error {
+func (r *accountIdentityRepository) DeleteOTP(ctx context.Context, email string, purpose OTPPurpose) error {
 	filter := bson.M{
 		"email":   email,
 		"purpose": purpose,
@@ -151,7 +150,7 @@ func (r *identityRepository) DeleteOTP(ctx context.Context, email string, purpos
 	return nil
 }
 
-func (r *identityRepository) CleanupExpiredOTPs(ctx context.Context) error {
+func (r *accountIdentityRepository) CleanupExpiredOTPs(ctx context.Context) error {
 	filter := bson.M{
 		"expires_at": bson.M{"$lte": time.Now()},
 	}
@@ -169,7 +168,7 @@ func (r *identityRepository) CleanupExpiredOTPs(ctx context.Context) error {
 	return nil
 }
 
-func (r *identityRepository) CreateSession(ctx context.Context, session *Session) (*Session, error) {
+func (r *accountIdentityRepository) CreateSession(ctx context.Context, session *Session) (*Session, error) {
 	session.ID = primitive.NewObjectID()
 	session.IsActive = true
 	session.CreatedAt = time.Now()
@@ -183,7 +182,7 @@ func (r *identityRepository) CreateSession(ctx context.Context, session *Session
 	return result, nil
 }
 
-func (r *identityRepository) GetSessionByToken(ctx context.Context, tokenHash string) (*Session, error) {
+func (r *accountIdentityRepository) GetSessionByToken(ctx context.Context, tokenHash string) (*Session, error) {
 	filter := bson.M{
 		"token_hash": tokenHash,
 		"is_active":  true,
@@ -201,7 +200,7 @@ func (r *identityRepository) GetSessionByToken(ctx context.Context, tokenHash st
 	return session, nil
 }
 
-func (r *identityRepository) GetSessionsByAccountID(ctx context.Context, accountID string) ([]*Session, error) {
+func (r *accountIdentityRepository) GetSessionsByAccountID(ctx context.Context, accountID string) ([]*Session, error) {
 	filter := bson.M{
 		"account_id": accountID,
 		"is_active":  true,
@@ -222,7 +221,7 @@ func (r *identityRepository) GetSessionsByAccountID(ctx context.Context, account
 	return result, nil
 }
 
-func (r *identityRepository) UpdateSessionLastUsed(ctx context.Context, id primitive.ObjectID) error {
+func (r *accountIdentityRepository) UpdateSessionLastUsed(ctx context.Context, id primitive.ObjectID) error {
 	filter := bson.M{"_id": id}
 	update := bson.M{
 		"$set": bson.M{"last_used_at": time.Now()},
@@ -236,7 +235,7 @@ func (r *identityRepository) UpdateSessionLastUsed(ctx context.Context, id primi
 	return nil
 }
 
-func (r *identityRepository) DeactivateSession(ctx context.Context, tokenHash string) error {
+func (r *accountIdentityRepository) DeactivateSession(ctx context.Context, tokenHash string) error {
 	filter := bson.M{"token_hash": tokenHash}
 	update := bson.M{
 		"$set": bson.M{
@@ -253,7 +252,7 @@ func (r *identityRepository) DeactivateSession(ctx context.Context, tokenHash st
 	return nil
 }
 
-func (r *identityRepository) DeactivateAllUserSessions(ctx context.Context, accountID string) error {
+func (r *accountIdentityRepository) DeactivateAllUserSessions(ctx context.Context, accountID string) error {
 	filter := bson.M{"account_id": accountID}
 	update := bson.M{
 		"$set": bson.M{
@@ -278,7 +277,7 @@ func (r *identityRepository) DeactivateAllUserSessions(ctx context.Context, acco
 	return nil
 }
 
-func (r *identityRepository) CleanupExpiredSessions(ctx context.Context) error {
+func (r *accountIdentityRepository) CleanupExpiredSessions(ctx context.Context) error {
 	filter := bson.M{
 		"$or": []bson.M{
 			{"expires_at": bson.M{"$lte": time.Now()}},
@@ -314,11 +313,3 @@ func generateOTPCode() (string, error) {
 	return string(code), nil
 }
 
-func hashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return fmt.Sprintf("%x", hash)
-}
-
-func (r *identityRepository) HashAndStoreToken(token string) string {
-	return hashToken(token)
-}

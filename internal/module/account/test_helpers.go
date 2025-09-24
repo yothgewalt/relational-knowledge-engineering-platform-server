@@ -140,6 +140,76 @@ func (m *MockAccountService) ListAccounts(ctx context.Context, req *ListAccounts
 	return args.Get(0).(*mongo.PaginatedResult[AccountResponse]), args.Error(1)
 }
 
+func (m *MockAccountService) Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error) {
+	args := m.Called(ctx, req, userAgent, ipAddress)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*LoginResponse), args.Error(1)
+}
+
+func (m *MockAccountService) Logout(ctx context.Context, token string) error {
+	args := m.Called(ctx, token)
+	return args.Error(0)
+}
+
+func (m *MockAccountService) Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*RegisterResponse), args.Error(1)
+}
+
+func (m *MockAccountService) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockAccountService) ResendEmailVerification(ctx context.Context, req *ResendVerificationRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockAccountService) ForgotPassword(ctx context.Context, req *ForgotPasswordRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockAccountService) ResetPassword(ctx context.Context, req *ResetPasswordRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockAccountService) ChangePassword(ctx context.Context, accountID string, req *ChangePasswordRequest) error {
+	args := m.Called(ctx, accountID, req)
+	return args.Error(0)
+}
+
+func (m *MockAccountService) ValidateToken(ctx context.Context, token string) (*ValidateTokenResponse, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*ValidateTokenResponse), args.Error(1)
+}
+
+func (m *MockAccountService) RefreshToken(ctx context.Context, token string, userAgent, ipAddress string) (*RefreshTokenResponse, error) {
+	args := m.Called(ctx, token, userAgent, ipAddress)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*RefreshTokenResponse), args.Error(1)
+}
+
+func (m *MockAccountService) GetCurrentUser(ctx context.Context, token string) (*MeResponse, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*MeResponse), args.Error(1)
+}
+
 func CreateTestAccount(overrides ...func(*Account)) *Account {
 	objectID := primitive.NewObjectID()
 	now := time.Now()

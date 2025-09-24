@@ -1,11 +1,9 @@
-package identity
+package account
 
 import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/account"
 )
 
 type LoginRequest struct {
@@ -14,8 +12,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token   string                   `json:"token"`
-	Account *account.AccountResponse `json:"account"`
+	Token   string           `json:"token"`
+	Account *AccountResponse `json:"account"`
 }
 
 type RegisterRequest struct {
@@ -28,8 +26,8 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	Account *account.AccountResponse `json:"account"`
-	Message string                   `json:"message"`
+	Account *AccountResponse `json:"account"`
+	Message string           `json:"message"`
 }
 
 type VerifyEmailRequest struct {
@@ -57,13 +55,26 @@ type ChangePasswordRequest struct {
 }
 
 type ValidateTokenResponse struct {
-	Valid   bool                     `json:"valid"`
-	Claims  *account.AccountJWTClaims `json:"claims,omitempty"`
-	Account *account.AccountResponse  `json:"account,omitempty"`
+	Valid   bool               `json:"valid"`
+	Claims  *AccountJWTClaims  `json:"claims,omitempty"`
+	Account *AccountResponse   `json:"account,omitempty"`
 }
 
 type RefreshTokenResponse struct {
 	Token string `json:"token"`
+}
+
+type MeResponse struct {
+	Account *AccountResponse `json:"account"`
+	Session *SessionInfo     `json:"session"`
+}
+
+type SessionInfo struct {
+	ID         string    `json:"id"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	UserAgent  string    `json:"user_agent"`
+	IPAddress  string    `json:"ip_address"`
 }
 
 type OTPPurpose string
@@ -118,6 +129,16 @@ func (otp *OTP) IsMaxAttemptsReached() bool {
 
 func (session *Session) IsExpired() bool {
 	return time.Now().After(session.ExpiresAt)
+}
+
+func (session *Session) ToSessionInfo() *SessionInfo {
+	return &SessionInfo{
+		ID:         session.ID.Hex(),
+		ExpiresAt:  session.ExpiresAt,
+		LastUsedAt: session.LastUsedAt,
+		UserAgent:  session.UserAgent,
+		IPAddress:  session.IPAddress,
+	}
 }
 
 func GetWelcomeEmailTemplate(username string) EmailTemplate {

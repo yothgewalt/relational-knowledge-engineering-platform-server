@@ -8,7 +8,6 @@ import (
 	_ "github.com/yothgewalt/relational-knowledge-engineering-platform-server/docs"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/account"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/identity"
 )
 
 func main() {
@@ -17,18 +16,13 @@ func main() {
 	opts := container.Options{Timezone: "Asia/Bangkok"}
 	c := container.New(&opts)
 
-	accountModule := account.NewAccountModule()
-	if err := c.RegisterModule(accountModule); err != nil {
-		panic(err)
-	}
-
 	fromEmail := os.Getenv("FROM_EMAIL")
 	if fromEmail == "" {
 		fromEmail = "noreply@example.com"
 	}
-	
-	identityModule := identity.NewIdentityModule(fromEmail)
-	if err := c.RegisterModule(identityModule); err != nil {
+
+	accountModule := account.NewAccountModule(fromEmail)
+	if err := c.RegisterModule(accountModule); err != nil {
 		panic(err)
 	}
 
