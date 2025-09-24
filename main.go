@@ -8,6 +8,7 @@ import (
 	_ "github.com/yothgewalt/relational-knowledge-engineering-platform-server/docs"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/account"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/telemetry"
 )
 
 func main() {
@@ -19,6 +20,11 @@ func main() {
 	fromEmail := os.Getenv("FROM_EMAIL")
 	if fromEmail == "" {
 		fromEmail = "noreply@example.com"
+	}
+
+	telemetryModule := telemetry.NewTelemetryModule()
+	if err := c.RegisterModule(telemetryModule); err != nil {
+		panic(err)
 	}
 
 	accountModule := account.NewAccountModule(fromEmail)

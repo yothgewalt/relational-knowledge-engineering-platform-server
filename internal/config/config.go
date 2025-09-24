@@ -17,6 +17,7 @@ type Config struct {
 	Redis        RedisConfig        `json:"redis"`
 	Neo4j        Neo4jConfig        `json:"neo4j"`
 	MinIO        MinIOConfig        `json:"minio"`
+	Telemetry    TelemetryConfig    `json:"telemetry"`
 	Features     FeaturesConfig     `json:"features"`
 	VaultSecrets VaultSecretsConfig `json:"vault_secrets"`
 	Vault        VaultConfig        `json:"vault"`
@@ -25,12 +26,13 @@ type Config struct {
 }
 
 type VaultSecretsConfig struct {
-	MongoSecretPath  string `json:"mongo_secret_path"`
-	RedisSecretPath  string `json:"redis_secret_path"`
-	Neo4jSecretPath  string `json:"neo4j_secret_path"`
-	MinioSecretPath  string `json:"minio_secret_path"`
-	ResendSecretPath string `json:"resend_secret_path"`
-	JwtSecretPath    string `json:"jwt_secret_path"`
+	MongoSecretPath     string `json:"mongo_secret_path"`
+	RedisSecretPath     string `json:"redis_secret_path"`
+	Neo4jSecretPath     string `json:"neo4j_secret_path"`
+	MinioSecretPath     string `json:"minio_secret_path"`
+	TelemetrySecretPath string `json:"telemetry_secret_path"`
+	ResendSecretPath    string `json:"resend_secret_path"`
+	JwtSecretPath       string `json:"jwt_secret_path"`
 }
 
 type ServerConfig struct {
@@ -38,6 +40,7 @@ type ServerConfig struct {
 	Host        string        `json:"host"`
 	AppName     string        `json:"app_name"`
 	ReadTimeout time.Duration `json:"read_timeout"`
+	Mode        string        `json:"mode"`
 }
 
 type MongoConfig struct {
@@ -66,6 +69,17 @@ type MinIOConfig struct {
 	SecretKey  string `json:"secret_key"`
 	UseSSL     bool   `json:"use_ssl"`
 	BucketName string `json:"bucket_name"`
+}
+
+type TelemetryConfig struct {
+	ServiceName    string  `json:"service_name"`
+	ServiceVersion string  `json:"service_version"`
+	Environment    string  `json:"environment"`
+	Enabled        bool    `json:"enabled"`
+	JaegerEndpoint string  `json:"jaeger_endpoint"`
+	OTLPEndpoint   string  `json:"otlp_endpoint"`
+	SamplingRatio  float64 `json:"sampling_ratio"`
+	ExporterType   string  `json:"exporter_type"`
 }
 
 type FeaturesConfig struct {
@@ -175,6 +189,12 @@ func loadVaultSecretsConfig() (VaultSecretsConfig, error) {
 	}
 	vaultConfig.MinioSecretPath = minioPath
 
+	telemetryPath, err := env.Get("VAULT_TELEMETRY_SECRET_PATH", "secret/telemetry")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.TelemetrySecretPath = telemetryPath
+
 	resendPath, err := env.Get("VAULT_RESEND_SECRET_PATH", "secret/email/resend")
 	if err != nil {
 		return vaultConfig, err
@@ -216,6 +236,21 @@ func loadServerConfig() (ServerConfig, error) {
 		return serverConfig, err
 	}
 	serverConfig.ReadTimeout = readTimeout
+
+	mode, err := env.Get("MODE", "development")
+	if err != nil {
+		return serverConfig, err
+	}
+
+	switch mode {
+	case "development", "production", "test":
+		serverConfig.Mode = mode
+	default:
+		logger.Warn().
+			Str("mode", mode).
+			Msg("Invalid MODE value, defaulting to development")
+		serverConfig.Mode = "development"
+	}
 
 	return serverConfig, nil
 }
@@ -420,6 +455,58 @@ func loadMinioConfig(vaultConfig VaultSecretsConfig) (MinIOConfig, error) {
 	return minioConfig, nil
 }
 
+func loadTelemetryConfig(vaultConfig VaultSecretsConfig, serverConfig ServerConfig) (TelemetryConfig, error) {
+	var telemetryConfig TelemetryConfig
+
+	logger.Debug().Msg("Loading Telemetry configuration from environment variables and Vault endpoints")
+
+	serviceName, err := env.Get("TELEMETRY_SERVICE_NAME", "relational-knowledge-engineering-platform")
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.ServiceName = serviceName
+
+	serviceVersion, err := env.Get("TELEMETRY_SERVICE_VERSION", "1.0.0")
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.ServiceVersion = serviceVersion
+
+	telemetryConfig.Environment = serverConfig.Mode
+
+	enabled, err := env.Get("TELEMETRY_ENABLED", true)
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.Enabled = enabled
+
+	samplingRatio, err := env.Get("TELEMETRY_SAMPLING_RATIO", 1.0)
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.SamplingRatio = samplingRatio
+
+	exporterType, err := env.Get("TELEMETRY_EXPORTER_TYPE", "otlp")
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.ExporterType = exporterType
+
+	jaegerEndpoint, err := getFromVaultOrEnv(vaultConfig.TelemetrySecretPath, "jaeger_endpoint", "TELEMETRY_JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.JaegerEndpoint = jaegerEndpoint
+
+	otlpEndpoint, err := getFromVaultOrEnv(vaultConfig.TelemetrySecretPath, "otlp_endpoint", "TELEMETRY_OTLP_ENDPOINT", "localhost:4317")
+	if err != nil {
+		return telemetryConfig, err
+	}
+	telemetryConfig.OTLPEndpoint = otlpEndpoint
+
+	return telemetryConfig, nil
+}
+
 func loadFeaturesConfig() (FeaturesConfig, error) {
 	var featuresConfig FeaturesConfig
 
@@ -584,6 +671,12 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.MinIO = minioConfig
+
+	telemetryConfig, err := loadTelemetryConfig(vaultSecretsConfig, serverConfig)
+	if err != nil {
+		return nil, err
+	}
+	config.Telemetry = telemetryConfig
 
 	featuresConfig, err := loadFeaturesConfig()
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/neo4j"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/telemetry"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
 )
 
@@ -40,13 +41,14 @@ type Container struct {
 	config *config.Config
 	logger zerolog.Logger
 
-	mongoClient  *mongo.MongoService
-	neo4jClient  neo4j.Neo4jService
-	redisClient  redis.RedisService
-	minioClient  minio.MinIOService
-	resendClient resend.ResendService
-	vaultClient  vault.VaultService
-	jwtService   *jwt.JWTService
+	mongoClient     *mongo.MongoService
+	neo4jClient     neo4j.Neo4jService
+	redisClient     redis.RedisService
+	minioClient     minio.MinIOService
+	telemetryClient telemetry.TelemetryService
+	resendClient    resend.ResendService
+	vaultClient     vault.VaultService
+	jwtService      *jwt.JWTService
 
 	registry       *ServiceRegistry
 	moduleManager  *ModuleManager
@@ -129,6 +131,10 @@ func (c *Container) Bootstrap() error {
 
 	if err := c.initializeMinIO(); err != nil {
 		c.logger.Warn().Err(err).Msg("MinIO initialization failed, file storage service will not be available")
+	}
+
+	if err := c.initializeTelemetry(); err != nil {
+		c.logger.Warn().Err(err).Msg("Telemetry initialization failed, tracing service will not be available")
 	}
 
 	if err := c.initializeResend(); err != nil {
@@ -483,6 +489,83 @@ func (c *Container) initializeMinIO() error {
 	return nil
 }
 
+func (c *Container) initializeTelemetry() error {
+	telemetryConfig := telemetry.TelemetryConfig{
+		ServiceName:     c.config.Telemetry.ServiceName,
+		ServiceVersion:  c.config.Telemetry.ServiceVersion,
+		Environment:     c.config.Telemetry.Environment,
+		Enabled:         c.config.Telemetry.Enabled,
+		JaegerEndpoint:  c.config.Telemetry.JaegerEndpoint,
+		OTLPEndpoint:    c.config.Telemetry.OTLPEndpoint,
+		SamplingRatio:   c.config.Telemetry.SamplingRatio,
+		ExporterType:    c.config.Telemetry.ExporterType,
+	}
+
+	c.logger.Info().
+		Str("service_name", telemetryConfig.ServiceName).
+		Str("service_version", telemetryConfig.ServiceVersion).
+		Str("environment", telemetryConfig.Environment).
+		Bool("enabled", telemetryConfig.Enabled).
+		Str("exporter_type", telemetryConfig.ExporterType).
+		Float64("sampling_ratio", telemetryConfig.SamplingRatio).
+		Msg("Attempting telemetry initialization")
+
+	client, err := telemetry.NewTelemetryService(telemetryConfig)
+	if err != nil {
+		c.logger.Error().
+			Err(err).
+			Str("service_name", telemetryConfig.ServiceName).
+			Str("exporter_type", telemetryConfig.ExporterType).
+			Msg("Failed to create telemetry client")
+		return fmt.Errorf("failed to create telemetry client: %w", err)
+	}
+
+	c.logger.Debug().Msg("Telemetry client created successfully, performing health check")
+
+	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer cancel()
+
+	health := client.HealthCheck(ctx)
+
+	c.logger.Info().
+		Bool("enabled", health.Enabled).
+		Str("service_name", health.ServiceName).
+		Str("exporter_type", health.ExporterType).
+		Float64("sampling_ratio", health.SamplingRatio).
+		Dur("latency", health.Latency).
+		Str("error", health.Error).
+		Msg("Telemetry health check completed")
+
+	if health.Error != "" {
+		c.logger.Error().
+			Str("error", health.Error).
+			Str("service_name", telemetryConfig.ServiceName).
+			Str("exporter_type", telemetryConfig.ExporterType).
+			Bool("enabled", health.Enabled).
+			Msg("Telemetry health check failed")
+		return fmt.Errorf("telemetry health check failed: %s", health.Error)
+	}
+
+	c.telemetryClient = client
+	c.addShutdownFunc(func() error {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer shutdownCancel()
+		return client.Shutdown(shutdownCtx)
+	})
+
+	c.logger.Info().
+		Str("service_name", telemetryConfig.ServiceName).
+		Str("service_version", telemetryConfig.ServiceVersion).
+		Str("environment", telemetryConfig.Environment).
+		Str("exporter_type", telemetryConfig.ExporterType).
+		Float64("sampling_ratio", telemetryConfig.SamplingRatio).
+		Bool("enabled", health.Enabled).
+		Dur("latency", health.Latency).
+		Msg("Telemetry service fully established and ready for tracing")
+
+	return nil
+}
+
 func (c *Container) initializeVault() error {
 	if c.config == nil {
 		return fmt.Errorf("config is not loaded")
@@ -639,6 +722,12 @@ func (c *Container) GetMinIOClient() minio.MinIOService {
 	return c.minioClient
 }
 
+func (c *Container) GetTelemetryClient() telemetry.TelemetryService {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.telemetryClient
+}
+
 func (c *Container) GetResendClient() resend.ResendService {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -732,6 +821,29 @@ func (c *Container) HealthCheck() HealthStatus {
 
 		services = append(services, ServiceHealth{
 			Name:      "minio",
+			Status:    status,
+			Message:   message,
+			Timestamp: time.Now(),
+		})
+	}
+
+	if c.telemetryClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		health := c.telemetryClient.HealthCheck(ctx)
+		cancel()
+
+		status := "healthy"
+		message := ""
+		if health.Error != "" {
+			status = "unhealthy"
+			message = health.Error
+			if overallStatus != "unhealthy" {
+				overallStatus = "degraded"
+			}
+		}
+
+		services = append(services, ServiceHealth{
+			Name:      "telemetry",
 			Status:    status,
 			Message:   message,
 			Timestamp: time.Now(),
@@ -872,6 +984,7 @@ func (c *Container) initializeRegistry() error {
 		c.redisClient,
 		c.neo4jClient,
 		c.minioClient,
+		c.telemetryClient,
 		c.resendClient,
 		c.vaultClient,
 		c.jwtService,

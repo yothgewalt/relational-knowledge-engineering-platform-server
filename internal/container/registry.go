@@ -13,6 +13,7 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/neo4j"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/telemetry"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/vault"
 )
 
@@ -20,13 +21,14 @@ type ServiceRegistry struct {
 	logger zerolog.Logger
 	mu     sync.RWMutex
 
-	mongoService  *mongo.MongoService
-	redisService  redis.RedisService
-	neo4jService  neo4j.Neo4jService
-	minioService  minio.MinIOService
-	resendService resend.ResendService
-	vaultService  vault.VaultService
-	jwtService    *jwt.JWTService
+	mongoService     *mongo.MongoService
+	redisService     redis.RedisService
+	neo4jService     neo4j.Neo4jService
+	minioService     minio.MinIOService
+	telemetryService telemetry.TelemetryService
+	resendService    resend.ResendService
+	vaultService     vault.VaultService
+	jwtService       *jwt.JWTService
 
 	services        map[string]interface{}
 	serviceTypes    map[string]reflect.Type
@@ -68,6 +70,7 @@ func (r *ServiceRegistry) RegisterInfrastructure(
 	redisService redis.RedisService,
 	neo4jService neo4j.Neo4jService,
 	minioService minio.MinIOService,
+	telemetryService telemetry.TelemetryService,
 	resendService resend.ResendService,
 	vaultService vault.VaultService,
 	jwtService *jwt.JWTService,
@@ -79,6 +82,7 @@ func (r *ServiceRegistry) RegisterInfrastructure(
 	r.redisService = redisService
 	r.neo4jService = neo4jService
 	r.minioService = minioService
+	r.telemetryService = telemetryService
 	r.resendService = resendService
 	r.vaultService = vaultService
 	r.jwtService = jwtService
@@ -174,6 +178,12 @@ func (r *ServiceRegistry) GetMinIO() minio.MinIOService {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.minioService
+}
+
+func (r *ServiceRegistry) GetTelemetry() telemetry.TelemetryService {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.telemetryService
 }
 
 func (r *ServiceRegistry) GetResend() resend.ResendService {
