@@ -49,7 +49,6 @@ services:
         environment:
             MINIO_ROOT_USER: minio
             MINIO_ROOT_PASSWORD: 7vvInMiCa52g1dj8JG1fRRS9
-            MINIO_DEFAULT_BUCKETS: files
         ports:
             - "9000:9000"
             - "9001:9001"
