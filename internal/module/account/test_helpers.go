@@ -210,6 +210,93 @@ func (m *MockAccountService) GetCurrentUser(ctx context.Context, token string) (
 	return args.Get(0).(*MeResponse), args.Error(1)
 }
 
+type MockAccountIdentityRepository struct {
+	mock.Mock
+}
+
+func (m *MockAccountIdentityRepository) CreateOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error) {
+	args := m.Called(ctx, email, purpose)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*OTP), args.Error(1)
+}
+
+func (m *MockAccountIdentityRepository) GetOTP(ctx context.Context, email string, purpose OTPPurpose) (*OTP, error) {
+	args := m.Called(ctx, email, purpose)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*OTP), args.Error(1)
+}
+
+func (m *MockAccountIdentityRepository) ValidateOTP(ctx context.Context, email string, purpose OTPPurpose, code string) (*OTP, error) {
+	args := m.Called(ctx, email, purpose, code)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*OTP), args.Error(1)
+}
+
+func (m *MockAccountIdentityRepository) IncrementOTPAttempts(ctx context.Context, id primitive.ObjectID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockAccountIdentityRepository) DeleteOTP(ctx context.Context, email string, purpose OTPPurpose) error {
+	args := m.Called(ctx, email, purpose)
+	return args.Error(0)
+}
+
+func (m *MockAccountIdentityRepository) CleanupExpiredOTPs(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockAccountIdentityRepository) CreateSession(ctx context.Context, session *Session) (*Session, error) {
+	args := m.Called(ctx, session)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Session), args.Error(1)
+}
+
+func (m *MockAccountIdentityRepository) GetSessionByToken(ctx context.Context, tokenHash string) (*Session, error) {
+	args := m.Called(ctx, tokenHash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Session), args.Error(1)
+}
+
+func (m *MockAccountIdentityRepository) GetSessionsByAccountID(ctx context.Context, accountID string) ([]*Session, error) {
+	args := m.Called(ctx, accountID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*Session), args.Error(1)
+}
+
+func (m *MockAccountIdentityRepository) UpdateSessionLastUsed(ctx context.Context, id primitive.ObjectID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockAccountIdentityRepository) DeactivateSession(ctx context.Context, tokenHash string) error {
+	args := m.Called(ctx, tokenHash)
+	return args.Error(0)
+}
+
+func (m *MockAccountIdentityRepository) DeactivateAllUserSessions(ctx context.Context, accountID string) error {
+	args := m.Called(ctx, accountID)
+	return args.Error(0)
+}
+
+func (m *MockAccountIdentityRepository) CleanupExpiredSessions(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func CreateTestAccount(overrides ...func(*Account)) *Account {
 	objectID := primitive.NewObjectID()
 	now := time.Now()
@@ -332,4 +419,133 @@ func StringPtr(s string) *string {
 
 func BoolPtr(b bool) *bool {
 	return &b
+}
+
+func CreateTestOTP(overrides ...func(*OTP)) *OTP {
+	objectID := primitive.NewObjectID()
+	now := time.Now()
+
+	otp := &OTP{
+		ID:        objectID,
+		Email:     "test@example.com",
+		Purpose:   OTPPurposeEmailVerification,
+		Code:      "123456",
+		Attempts:  0,
+		ExpiresAt: now.Add(OTPExpiry),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	for _, override := range overrides {
+		override(otp)
+	}
+
+	return otp
+}
+
+func CreateTestSession(overrides ...func(*Session)) *Session {
+	objectID := primitive.NewObjectID()
+	now := time.Now()
+
+	session := &Session{
+		ID:          objectID,
+		AccountID:   primitive.NewObjectID().Hex(),
+		TokenHash:   "hashedtoken123",
+		IsActive:    true,
+		ExpiresAt:   now.Add(24 * time.Hour),
+		CreatedAt:   now,
+		LastUsedAt:  now,
+		UserAgent:   "Mozilla/5.0 (Test Browser)",
+		IPAddress:   "192.168.1.1",
+	}
+
+	for _, override := range overrides {
+		override(session)
+	}
+
+	return session
+}
+
+func CreateTestLoginRequest(overrides ...func(*LoginRequest)) *LoginRequest {
+	req := &LoginRequest{
+		Email:    "test@example.com",
+		Password: "password123",
+	}
+
+	for _, override := range overrides {
+		override(req)
+	}
+
+	return req
+}
+
+func CreateTestRegisterRequest(overrides ...func(*RegisterRequest)) *RegisterRequest {
+	req := &RegisterRequest{
+		Email:     "test@example.com",
+		Username:  "testuser",
+		FirstName: "Test",
+		LastName:  "User",
+		Password:  "password123",
+		Avatar:    "https://example.com/avatar.jpg",
+	}
+
+	for _, override := range overrides {
+		override(req)
+	}
+
+	return req
+}
+
+func CreateTestVerifyEmailRequest(overrides ...func(*VerifyEmailRequest)) *VerifyEmailRequest {
+	req := &VerifyEmailRequest{
+		Email: "test@example.com",
+		OTP:   "123456",
+	}
+
+	for _, override := range overrides {
+		override(req)
+	}
+
+	return req
+}
+
+func CreateTestResetPasswordRequest(overrides ...func(*ResetPasswordRequest)) *ResetPasswordRequest {
+	req := &ResetPasswordRequest{
+		Email:       "test@example.com",
+		OTP:         "123456",
+		NewPassword: "newpassword123",
+	}
+
+	for _, override := range overrides {
+		override(req)
+	}
+
+	return req
+}
+
+func CreateTestChangePasswordRequest(overrides ...func(*ChangePasswordRequest)) *ChangePasswordRequest {
+	req := &ChangePasswordRequest{
+		OldPassword: "oldpassword123",
+		NewPassword: "newpassword123",
+	}
+
+	for _, override := range overrides {
+		override(req)
+	}
+
+	return req
+}
+
+func CreateTestValidateTokenResponse(overrides ...func(*ValidateTokenResponse)) *ValidateTokenResponse {
+	resp := &ValidateTokenResponse{
+		Valid:   true,
+		Claims:  CreateTestAccountJWTClaims(),
+		Account: CreateTestAccountResponse(),
+	}
+
+	for _, override := range overrides {
+		override(resp)
+	}
+
+	return resp
 }
