@@ -8,7 +8,6 @@ import (
 	_ "github.com/yothgewalt/relational-knowledge-engineering-platform-server/docs"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/account"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/docs"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/telemetry"
 )
 
@@ -16,9 +15,9 @@ import (
 // @description A comprehensive API for the Relational Knowledge Engineering Platform, providing account management, authentication, and telemetry services.
 // @version 1.0.0
 // @contact.name API Support
-// @contact.email support@example.com
-// @host localhost:8080
-// @BasePath /
+// @contact.email eine.schlacht@gmail.com
+// @host localhost:3000
+// @BasePath /api/v1
 // @schemes http https
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -37,11 +36,6 @@ func main() {
 
 	telemetryModule := telemetry.NewTelemetryModule()
 	if err := c.RegisterModule(telemetryModule); err != nil {
-		panic(err)
-	}
-
-	docsModule := docs.NewDocsModule()
-	if err := c.RegisterModule(docsModule); err != nil {
 		panic(err)
 	}
 

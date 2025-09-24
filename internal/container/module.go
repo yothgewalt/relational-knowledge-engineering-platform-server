@@ -67,61 +67,83 @@ func NewModuleManager(registry *ServiceRegistry, logger zerolog.Logger) *ModuleM
 
 func (mm *ModuleManager) RegisterModule(module Module) error {
 	info := module.Info()
-	
+
 	if err := mm.validateDependencies(info.Dependencies); err != nil {
 		return err
 	}
 
 	mm.modules = append(mm.modules, module)
-	
+
 	mm.logger.Info().Str("module", info.Name).Str("version", info.Version).Msg("Module registered")
-	
+
 	return nil
 }
 
 func (mm *ModuleManager) InitializeServices() error {
 	for _, module := range mm.modules {
 		info := module.Info()
-		
+
 		if err := module.RegisterServices(mm.registry); err != nil {
 			return err
 		}
-		
+
 		mm.logger.Info().Str("module", info.Name).Msg("Module services initialized")
 	}
-	
+
 	if err := mm.registry.ValidateDependencies(); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
 func (mm *ModuleManager) InitializeMiddleware() error {
 	for _, module := range mm.modules {
 		info := module.Info()
-		
+
 		if err := module.RegisterMiddleware(mm.registry); err != nil {
 			return err
 		}
-		
+
 		mm.logger.Info().Str("module", info.Name).Msg("Module middleware initialized")
 	}
-	
+
 	return nil
 }
 
 func (mm *ModuleManager) InitializeRoutes(router fiber.Router) error {
 	for _, module := range mm.modules {
 		info := module.Info()
-		
+
+		if info.Name == "docs" {
+			continue
+		}
+
 		if err := module.RegisterRoutes(router, mm.registry); err != nil {
 			return err
 		}
-		
+
 		mm.logger.Info().Str("module", info.Name).Msg("Module routes initialized")
 	}
-	
+
+	return nil
+}
+
+func (mm *ModuleManager) InitializeDocsRoutes(router fiber.Router) error {
+	for _, module := range mm.modules {
+		info := module.Info()
+
+		if info.Name == "docs" {
+			if err := module.RegisterRoutes(router, mm.registry); err != nil {
+				return err
+			}
+
+			mm.logger.Info().Str("module", info.Name).Msg("Docs module routes initialized on main router")
+			mm.logger.Info().Msg("API documentation available at: http://localhost:3000/docs")
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -146,11 +168,11 @@ func (mm *ModuleManager) validateDependencies(dependencies []string) error {
 				break
 			}
 		}
-		
+
 		if !found {
 			return ServiceNotFoundError{ServiceName: dep}
 		}
 	}
-	
+
 	return nil
 }

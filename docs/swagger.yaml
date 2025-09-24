@@ -1,4 +1,4 @@
-basePath: /
+basePath: /api/v1
 definitions:
   account.ChangePasswordRequest:
     properties:
@@ -131,7 +131,7 @@ definitions:
     - email
     - otp
     type: object
-host: localhost:8080
+host: localhost:3000
 info:
   contact:
     email: support@example.com

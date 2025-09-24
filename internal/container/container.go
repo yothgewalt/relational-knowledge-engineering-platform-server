@@ -1042,6 +1042,11 @@ func (c *Container) initializeRouter() error {
 		return fmt.Errorf("failed to initialize routes: %w", err)
 	}
 
+	// Register docs module on main router (not under /api/v1)
+	if err := c.moduleManager.InitializeDocsRoutes(c.app); err != nil {
+		return fmt.Errorf("failed to initialize docs routes: %w", err)
+	}
+
 	c.logger.Info().Msg("Router initialized via module system")
 	return nil
 }
