@@ -23,7 +23,6 @@ type AccountService interface {
 	GetAccountByUsername(ctx context.Context, username string) (*AccountResponse, error)
 	UpdateAccount(ctx context.Context, id string, req *UpdateAccountRequest) (*AccountResponse, error)
 	DeleteAccount(ctx context.Context, id string) error
-	ListAccounts(ctx context.Context, req *ListAccountsRequest) (*mongo.PaginatedResult[AccountResponse], error)
 
 	Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error)
 	Logout(ctx context.Context, token string) error
@@ -239,53 +238,6 @@ func (s *accountService) DeleteAccount(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *accountService) ListAccounts(ctx context.Context, req *ListAccountsRequest) (*mongo.PaginatedResult[AccountResponse], error) {
-	filter := bson.M{}
-
-	if req.Email != "" {
-		filter["email"] = bson.M{"$regex": req.Email, "$options": "i"}
-	}
-
-	if req.Username != "" {
-		filter["username"] = bson.M{"$regex": req.Username, "$options": "i"}
-	}
-
-	if req.IsActive != nil {
-		filter["is_active"] = *req.IsActive
-	}
-
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Limit <= 0 {
-		req.Limit = 10
-	}
-
-	pagination := mongo.PaginationOptions{
-		Page:  req.Page,
-		Limit: req.Limit,
-	}
-
-	result, err := s.repository.List(ctx, filter, pagination)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list accounts: %w", err)
-	}
-
-	responses := make([]AccountResponse, len(result.Data))
-	for i, account := range result.Data {
-		responses[i] = *account.ToResponse()
-	}
-
-	return &mongo.PaginatedResult[AccountResponse]{
-		Data:       responses,
-		Total:      result.Total,
-		Page:       result.Page,
-		Limit:      result.Limit,
-		TotalPages: result.TotalPages,
-		HasNext:    result.HasNext,
-		HasPrev:    result.HasPrev,
-	}, nil
-}
 
 func (s *accountService) Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error) {
 	account, err := s.repository.GetByEmail(ctx, req.Email)

@@ -134,7 +134,7 @@ definitions:
 host: localhost:3000
 info:
   contact:
-    email: support@example.com
+    email: eine.schlacht@gmail.com
     name: API Support
   description: A comprehensive API for the Relational Knowledge Engineering Platform,
     providing account management, authentication, and telemetry services.
@@ -142,58 +142,6 @@ info:
   version: 1.0.0
 paths:
   /accounts:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of accounts with optional filters (requires
-        authentication)
-      parameters:
-      - description: Page number
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - description: Items per page
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      - description: Filter by email
-        in: query
-        name: email
-        type: string
-      - description: Filter by username
-        in: query
-        name: username
-        type: string
-      - description: Filter by active status
-        in: query
-        name: is_active
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Accounts retrieved successfully
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: List accounts
-      tags:
-      - accounts
     post:
       consumes:
       - application/json

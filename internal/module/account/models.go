@@ -47,13 +47,6 @@ type AccountResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type ListAccountsRequest struct {
-	Page     int64  `query:"page" validate:"min=1"`
-	Limit    int64  `query:"limit" validate:"min=1,max=100"`
-	Email    string `query:"email"`
-	Username string `query:"username"`
-	IsActive *bool  `query:"is_active"`
-}
 
 type AccountJWTClaims struct {
 	AccountID string `json:"account_id"`

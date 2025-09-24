@@ -347,31 +347,6 @@ func TestAccountResponseJSONMarshalUnmarshal(t *testing.T) {
 	assert.Equal(t, original.IsActive, unmarshaled.IsActive)
 }
 
-func TestListAccountsRequestJSONMarshalUnmarshal(t *testing.T) {
-	isActive := true
-
-	original := &ListAccountsRequest{
-		Page:     1,
-		Limit:    10,
-		Email:    "test@example.com",
-		Username: "testuser",
-		IsActive: &isActive,
-	}
-
-	jsonData, err := json.Marshal(original)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, jsonData)
-
-	var unmarshaled ListAccountsRequest
-	err = json.Unmarshal(jsonData, &unmarshaled)
-	assert.NoError(t, err)
-
-	assert.Equal(t, original.Page, unmarshaled.Page)
-	assert.Equal(t, original.Limit, unmarshaled.Limit)
-	assert.Equal(t, original.Email, unmarshaled.Email)
-	assert.Equal(t, original.Username, unmarshaled.Username)
-	assert.Equal(t, *original.IsActive, *unmarshaled.IsActive)
-}
 
 func TestAccountJWTClaimsJSONMarshalUnmarshal(t *testing.T) {
 	original := &AccountJWTClaims{

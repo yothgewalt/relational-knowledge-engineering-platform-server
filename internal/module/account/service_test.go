@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
 )
 
 func TestNewAccountService(t *testing.T) {
@@ -440,95 +439,6 @@ func TestAccountService_DeleteAccount(t *testing.T) {
 	}
 }
 
-func TestAccountService_ListAccounts(t *testing.T) {
-	tests := []struct {
-		name          string
-		request       *ListAccountsRequest
-		setupMock     func(*MockAccountRepository)
-		expectedError string
-		expectSuccess bool
-	}{
-		{
-			name:    "successful list with all filters",
-			request: CreateTestListAccountsRequest(),
-			setupMock: func(mockRepo *MockAccountRepository) {
-				accounts := []Account{
-					*CreateTestAccount(),
-					*CreateTestAccount(func(a *Account) {
-						a.Email = "test2@example.com"
-						a.Username = "testuser2"
-					}),
-				}
-
-				result := &mongo.PaginatedResult[Account]{
-					Data:       accounts,
-					Total:      2,
-					Page:       1,
-					Limit:      10,
-					TotalPages: 1,
-				}
-
-				mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return(result, nil)
-			},
-			expectSuccess: true,
-		},
-		{
-			name: "list with minimal filters",
-			request: CreateTestListAccountsRequest(func(req *ListAccountsRequest) {
-				req.Email = ""
-				req.Username = ""
-				req.IsActive = nil
-			}),
-			setupMock: func(mockRepo *MockAccountRepository) {
-				result := &mongo.PaginatedResult[Account]{
-					Data:       []Account{},
-					Total:      0,
-					Page:       1,
-					Limit:      10,
-					TotalPages: 0,
-				}
-
-				mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return(result, nil)
-			},
-			expectSuccess: true,
-		},
-		{
-			name:    "list fails",
-			request: CreateTestListAccountsRequest(),
-			setupMock: func(mockRepo *MockAccountRepository) {
-				mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return((*mongo.PaginatedResult[Account])(nil), errors.New("list failed"))
-			},
-			expectedError: "failed to list accounts",
-			expectSuccess: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := &MockAccountRepository{}
-			tt.setupMock(mockRepo)
-
-			service := &accountService{repository: mockRepo}
-
-			result, err := service.ListAccounts(context.Background(), tt.request)
-
-			if tt.expectSuccess {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-				assert.Equal(t, tt.request.Page, result.Page)
-				assert.Equal(t, tt.request.Limit, result.Limit)
-			} else {
-				assert.Error(t, err)
-				assert.Nil(t, result)
-				if tt.expectedError != "" {
-					assert.Contains(t, err.Error(), tt.expectedError)
-				}
-			}
-
-			mockRepo.AssertExpectations(t)
-		})
-	}
-}
 
 func TestAccountService_AccountCreationTimestamps(t *testing.T) {
 	mockRepo := &MockAccountRepository{}

@@ -115,10 +115,6 @@ func (mm *ModuleManager) InitializeRoutes(router fiber.Router) error {
 	for _, module := range mm.modules {
 		info := module.Info()
 
-		if info.Name == "docs" {
-			continue
-		}
-
 		if err := module.RegisterRoutes(router, mm.registry); err != nil {
 			return err
 		}
@@ -129,23 +125,6 @@ func (mm *ModuleManager) InitializeRoutes(router fiber.Router) error {
 	return nil
 }
 
-func (mm *ModuleManager) InitializeDocsRoutes(router fiber.Router) error {
-	for _, module := range mm.modules {
-		info := module.Info()
-
-		if info.Name == "docs" {
-			if err := module.RegisterRoutes(router, mm.registry); err != nil {
-				return err
-			}
-
-			mm.logger.Info().Str("module", info.Name).Msg("Docs module routes initialized on main router")
-			mm.logger.Info().Msg("API documentation available at: http://localhost:3000/docs")
-			break
-		}
-	}
-
-	return nil
-}
 
 func (mm *ModuleManager) GetModules() []Module {
 	return mm.modules

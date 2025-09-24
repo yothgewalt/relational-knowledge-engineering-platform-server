@@ -140,13 +140,6 @@ func (m *MockAccountService) DeleteAccount(ctx context.Context, id string) error
 	return args.Error(0)
 }
 
-func (m *MockAccountService) ListAccounts(ctx context.Context, req *ListAccountsRequest) (*mongo.PaginatedResult[AccountResponse], error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*mongo.PaginatedResult[AccountResponse]), args.Error(1)
-}
 
 func (m *MockAccountService) Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error) {
 	args := m.Called(ctx, req, userAgent, ipAddress)
@@ -390,23 +383,6 @@ func CreateTestUpdateAccountRequest(overrides ...func(*UpdateAccountRequest)) *U
 	return req
 }
 
-func CreateTestListAccountsRequest(overrides ...func(*ListAccountsRequest)) *ListAccountsRequest {
-	isActive := true
-
-	req := &ListAccountsRequest{
-		Page:     1,
-		Limit:    10,
-		Email:    "test@example.com",
-		Username: "testuser",
-		IsActive: &isActive,
-	}
-
-	for _, override := range overrides {
-		override(req)
-	}
-
-	return req
-}
 
 func CreateTestAccountJWTClaims(overrides ...func(*AccountJWTClaims)) *AccountJWTClaims {
 	claims := &AccountJWTClaims{

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/swagger"
 	"github.com/rs/zerolog"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
@@ -491,14 +492,14 @@ func (c *Container) initializeMinIO() error {
 
 func (c *Container) initializeTelemetry() error {
 	telemetryConfig := telemetry.TelemetryConfig{
-		ServiceName:     c.config.Telemetry.ServiceName,
-		ServiceVersion:  c.config.Telemetry.ServiceVersion,
-		Environment:     c.config.Telemetry.Environment,
-		Enabled:         c.config.Telemetry.Enabled,
-		JaegerEndpoint:  c.config.Telemetry.JaegerEndpoint,
-		OTLPEndpoint:    c.config.Telemetry.OTLPEndpoint,
-		SamplingRatio:   c.config.Telemetry.SamplingRatio,
-		ExporterType:    c.config.Telemetry.ExporterType,
+		ServiceName:    c.config.Telemetry.ServiceName,
+		ServiceVersion: c.config.Telemetry.ServiceVersion,
+		Environment:    c.config.Telemetry.Environment,
+		Enabled:        c.config.Telemetry.Enabled,
+		JaegerEndpoint: c.config.Telemetry.JaegerEndpoint,
+		OTLPEndpoint:   c.config.Telemetry.OTLPEndpoint,
+		SamplingRatio:  c.config.Telemetry.SamplingRatio,
+		ExporterType:   c.config.Telemetry.ExporterType,
 	}
 
 	c.logger.Info().
@@ -1042,10 +1043,8 @@ func (c *Container) initializeRouter() error {
 		return fmt.Errorf("failed to initialize routes: %w", err)
 	}
 
-	// Register docs module on main router (not under /api/v1)
-	if err := c.moduleManager.InitializeDocsRoutes(c.app); err != nil {
-		return fmt.Errorf("failed to initialize docs routes: %w", err)
-	}
+	c.app.Get("/swagger/*", swagger.HandlerDefault)
+	c.logger.Info().Msg("API documentation available at: http://localhost:3000/swagger/")
 
 	c.logger.Info().Msg("Router initialized via module system")
 	return nil

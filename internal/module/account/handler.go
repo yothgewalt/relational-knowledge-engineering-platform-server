@@ -1,7 +1,6 @@
 package account
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -268,67 +267,6 @@ func (h *AccountHandler) DeleteAccount(c *fiber.Ctx) error {
 	})
 }
 
-// ListAccounts godoc
-// @Summary List accounts
-// @Description Get a paginated list of accounts with optional filters (requires authentication)
-// @Tags accounts
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param page query int false "Page number" minimum(1)
-// @Param limit query int false "Items per page" minimum(1) maximum(100)
-// @Param email query string false "Filter by email"
-// @Param username query string false "Filter by username"
-// @Param is_active query bool false "Filter by active status"
-// @Success 200 {object} map[string]interface{} "Accounts retrieved successfully"
-// @Failure 401 {object} map[string]interface{} "Unauthorized"
-// @Failure 500 {object} map[string]interface{} "Internal server error"
-// @Router /accounts [get]
-func (h *AccountHandler) ListAccounts(c *fiber.Ctx) error {
-	var req ListAccountsRequest
-	
-	if page := c.Query("page"); page != "" {
-		if p, err := strconv.ParseInt(page, 10, 64); err == nil {
-			req.Page = p
-		}
-	}
-	
-	if limit := c.Query("limit"); limit != "" {
-		if l, err := strconv.ParseInt(limit, 10, 64); err == nil {
-			req.Limit = l
-		}
-	}
-	
-	req.Email = c.Query("email")
-	req.Username = c.Query("username")
-	
-	if isActive := c.Query("is_active"); isActive != "" {
-		if active, err := strconv.ParseBool(isActive); err == nil {
-			req.IsActive = &active
-		}
-	}
-
-	result, err := h.service.ListAccounts(c.Context(), &req)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to list accounts",
-			"message": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "Accounts retrieved successfully",
-		"data":    result.Data,
-		"meta": fiber.Map{
-			"total":       result.Total,
-			"page":        result.Page,
-			"limit":       result.Limit,
-			"total_pages": result.TotalPages,
-			"has_next":    result.HasNext,
-			"has_prev":    result.HasPrev,
-		},
-	})
-}
 
 // Login godoc
 // @Summary User login

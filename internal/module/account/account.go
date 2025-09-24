@@ -107,7 +107,6 @@ func (m *AccountModule) RegisterRoutes(router fiber.Router, registry *container.
 	accounts.Post("/resend-verification", handler.ResendEmailVerification)
 	accounts.Post("/change-password", middleware.RequireAuth(), handler.ChangePassword)
 
-	accounts.Get("/", middleware.RequireAuth(), handler.ListAccounts)
 	accounts.Post("/", handler.CreateAccount)
 	accounts.Get("/me", middleware.RequireAuth(), handler.GetMe)
 
