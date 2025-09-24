@@ -216,7 +216,6 @@ func TestAccountService_Register(t *testing.T) {
 func TestAccountService_ValidateToken(t *testing.T) {
 	service, mockAccountRepo, mockIdentityRepo, jwtService, _ := setupAccountService()
 
-	// Create a valid token for testing
 	customClaims := map[string]any{
 		"account_id": "507f1f77bcf86cd799439011",
 		"email":      "test@example.com",
