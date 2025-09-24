@@ -17,6 +17,17 @@ func NewAccountHandler(service AccountService) *AccountHandler {
 	}
 }
 
+// CreateAccount godoc
+// @Summary Create account
+// @Description Create a new account (admin operation)
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param request body CreateAccountRequest true "Account creation details"
+// @Success 201 {object} map[string]interface{} "Account created successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 409 {object} map[string]interface{} "Conflict - account already exists"
+// @Router /accounts [post]
 func (h *AccountHandler) CreateAccount(c *fiber.Ctx) error {
 	var req CreateAccountRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -45,6 +56,19 @@ func (h *AccountHandler) CreateAccount(c *fiber.Ctx) error {
 	})
 }
 
+// GetAccount godoc
+// @Summary Get account by ID
+// @Description Get account information by account ID (requires authentication and ownership validation)
+// @Tags accounts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Account ID"
+// @Success 200 {object} map[string]interface{} "Account retrieved successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "Account not found"
+// @Router /accounts/{id} [get]
 func (h *AccountHandler) GetAccount(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -73,6 +97,17 @@ func (h *AccountHandler) GetAccount(c *fiber.Ctx) error {
 	})
 }
 
+// GetAccountByEmail godoc
+// @Summary Get account by email
+// @Description Get account information by email address (optional authentication)
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param email query string true "Email address"
+// @Success 200 {object} map[string]interface{} "Account retrieved successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request - email parameter required"
+// @Failure 404 {object} map[string]interface{} "Account not found"
+// @Router /accounts/email [get]
 func (h *AccountHandler) GetAccountByEmail(c *fiber.Ctx) error {
 	email := c.Query("email")
 	if email == "" {
@@ -101,6 +136,17 @@ func (h *AccountHandler) GetAccountByEmail(c *fiber.Ctx) error {
 	})
 }
 
+// GetAccountByUsername godoc
+// @Summary Get account by username
+// @Description Get account information by username (optional authentication)
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param username query string true "Username"
+// @Success 200 {object} map[string]interface{} "Account retrieved successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request - username parameter required"
+// @Failure 404 {object} map[string]interface{} "Account not found"
+// @Router /accounts/username [get]
 func (h *AccountHandler) GetAccountByUsername(c *fiber.Ctx) error {
 	username := c.Query("username")
 	if username == "" {
@@ -129,6 +175,21 @@ func (h *AccountHandler) GetAccountByUsername(c *fiber.Ctx) error {
 	})
 }
 
+// UpdateAccount godoc
+// @Summary Update account
+// @Description Update account information (requires authentication and ownership validation)
+// @Tags accounts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Account ID"
+// @Param request body UpdateAccountRequest true "Account update details"
+// @Success 200 {object} map[string]interface{} "Account updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "Account not found"
+// @Failure 409 {object} map[string]interface{} "Conflict - username already taken"
+// @Router /accounts/{id} [put]
 func (h *AccountHandler) UpdateAccount(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -167,6 +228,19 @@ func (h *AccountHandler) UpdateAccount(c *fiber.Ctx) error {
 	})
 }
 
+// DeleteAccount godoc
+// @Summary Delete account
+// @Description Delete account by ID (requires authentication and ownership validation)
+// @Tags accounts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Account ID"
+// @Success 200 {object} map[string]interface{} "Account deleted successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "Account not found"
+// @Router /accounts/{id} [delete]
 func (h *AccountHandler) DeleteAccount(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -194,6 +268,22 @@ func (h *AccountHandler) DeleteAccount(c *fiber.Ctx) error {
 	})
 }
 
+// ListAccounts godoc
+// @Summary List accounts
+// @Description Get a paginated list of accounts with optional filters (requires authentication)
+// @Tags accounts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" minimum(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100)
+// @Param email query string false "Filter by email"
+// @Param username query string false "Filter by username"
+// @Param is_active query bool false "Filter by active status"
+// @Success 200 {object} map[string]interface{} "Accounts retrieved successfully"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /accounts [get]
 func (h *AccountHandler) ListAccounts(c *fiber.Ctx) error {
 	var req ListAccountsRequest
 	
@@ -240,6 +330,18 @@ func (h *AccountHandler) ListAccounts(c *fiber.Ctx) error {
 	})
 }
 
+// Login godoc
+// @Summary User login
+// @Description Authenticate user with email and password
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} map[string]interface{} "Login successful"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid credentials"
+// @Failure 403 {object} map[string]interface{} "Forbidden - account inactive"
+// @Router /accounts/login [post]
 func (h *AccountHandler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -271,6 +373,17 @@ func (h *AccountHandler) Login(c *fiber.Ctx) error {
 	})
 }
 
+// Logout godoc
+// @Summary User logout
+// @Description Logout user by invalidating the session token
+// @Tags authentication
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Logout successful"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /accounts/logout [post]
 func (h *AccountHandler) Logout(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
@@ -302,6 +415,17 @@ func (h *AccountHandler) Logout(c *fiber.Ctx) error {
 	})
 }
 
+// Register godoc
+// @Summary User registration
+// @Description Register a new user account with email verification
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body RegisterRequest true "Registration details"
+// @Success 201 {object} map[string]interface{} "Account created successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 409 {object} map[string]interface{} "Conflict - account already exists"
+// @Router /accounts/register [post]
 func (h *AccountHandler) Register(c *fiber.Ctx) error {
 	var req RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -330,6 +454,17 @@ func (h *AccountHandler) Register(c *fiber.Ctx) error {
 	})
 }
 
+// VerifyEmail godoc
+// @Summary Verify email address
+// @Description Verify user's email address with OTP code
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body VerifyEmailRequest true "Email verification details"
+// @Success 200 {object} map[string]interface{} "Email verified successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid or expired OTP"
+// @Router /accounts/verify-email [post]
 func (h *AccountHandler) VerifyEmail(c *fiber.Ctx) error {
 	var req VerifyEmailRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -357,6 +492,18 @@ func (h *AccountHandler) VerifyEmail(c *fiber.Ctx) error {
 	})
 }
 
+// ResendEmailVerification godoc
+// @Summary Resend email verification
+// @Description Resend email verification OTP to user's email address
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body ResendVerificationRequest true "Resend verification details"
+// @Success 200 {object} map[string]interface{} "Verification email sent successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 404 {object} map[string]interface{} "Account not found"
+// @Failure 409 {object} map[string]interface{} "Email already verified"
+// @Router /accounts/resend-verification [post]
 func (h *AccountHandler) ResendEmailVerification(c *fiber.Ctx) error {
 	var req ResendVerificationRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -386,6 +533,17 @@ func (h *AccountHandler) ResendEmailVerification(c *fiber.Ctx) error {
 	})
 }
 
+// ForgotPassword godoc
+// @Summary Request password reset
+// @Description Send password reset OTP to user's email address
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body ForgotPasswordRequest true "Forgot password details"
+// @Success 200 {object} map[string]interface{} "Password reset email sent"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /accounts/forgot-password [post]
 func (h *AccountHandler) ForgotPassword(c *fiber.Ctx) error {
 	var req ForgotPasswordRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -408,6 +566,17 @@ func (h *AccountHandler) ForgotPassword(c *fiber.Ctx) error {
 	})
 }
 
+// ResetPassword godoc
+// @Summary Reset password
+// @Description Reset user's password using OTP code
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body ResetPasswordRequest true "Password reset details"
+// @Success 200 {object} map[string]interface{} "Password reset successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid or expired OTP"
+// @Router /accounts/reset-password [post]
 func (h *AccountHandler) ResetPassword(c *fiber.Ctx) error {
 	var req ResetPasswordRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -435,6 +604,19 @@ func (h *AccountHandler) ResetPassword(c *fiber.Ctx) error {
 	})
 }
 
+// ChangePassword godoc
+// @Summary Change password
+// @Description Change user's password (requires authentication)
+// @Tags authentication
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body ChangePasswordRequest true "Change password details"
+// @Success 200 {object} map[string]interface{} "Password changed successfully"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - incorrect password"
+// @Failure 403 {object} map[string]interface{} "Forbidden - account inactive"
+// @Router /accounts/change-password [post]
 func (h *AccountHandler) ChangePassword(c *fiber.Ctx) error {
 	var req ChangePasswordRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -472,6 +654,16 @@ func (h *AccountHandler) ChangePassword(c *fiber.Ctx) error {
 	})
 }
 
+// ValidateToken godoc
+// @Summary Validate JWT token
+// @Description Validate the provided JWT token and return user information
+// @Tags authentication
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Token is valid"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid or expired token"
+// @Router /accounts/validate [post]
 func (h *AccountHandler) ValidateToken(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
@@ -508,6 +700,16 @@ func (h *AccountHandler) ValidateToken(c *fiber.Ctx) error {
 	})
 }
 
+// RefreshToken godoc
+// @Summary Refresh JWT token
+// @Description Refresh the provided JWT token to extend session
+// @Tags authentication
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Token refreshed successfully"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - token refresh failed"
+// @Router /accounts/refresh [post]
 func (h *AccountHandler) RefreshToken(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
@@ -543,6 +745,16 @@ func (h *AccountHandler) RefreshToken(c *fiber.Ctx) error {
 	})
 }
 
+// GetMe godoc
+// @Summary Get current user
+// @Description Get current authenticated user's information
+// @Tags accounts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Current user retrieved successfully"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Router /accounts/me [get]
 func (h *AccountHandler) GetMe(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {

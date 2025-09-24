@@ -11,6 +11,18 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/telemetry"
 )
 
+// @title Relational Knowledge Engineering Platform API
+// @description A comprehensive API for the Relational Knowledge Engineering Platform, providing account management, authentication, and telemetry services.
+// @version 1.0.0
+// @contact.name API Support
+// @contact.email support@example.com
+// @host localhost:8080
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 func main() {
 	_ = godotenv.Load()
 
