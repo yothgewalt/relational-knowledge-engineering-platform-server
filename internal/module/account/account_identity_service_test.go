@@ -11,40 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
-	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/resend"
 )
 
-type MockResendService struct {
-	mock.Mock
-}
-
-func (m *MockResendService) SendEmail(ctx context.Context, req *resend.EmailRequest) (*resend.EmailResponse, error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*resend.EmailResponse), args.Error(1)
-}
-
-func (m *MockResendService) HealthCheck(ctx context.Context) resend.HealthStatus {
-	args := m.Called(ctx)
-	return args.Get(0).(resend.HealthStatus)
-}
-
-func (m *MockResendService) SendBulkEmails(ctx context.Context, requests []*resend.EmailRequest) ([]*resend.EmailResponse, error) {
-	args := m.Called(ctx, requests)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*resend.EmailResponse), args.Error(1)
-}
-
-func (m *MockResendService) Close() error {
-	args := m.Called()
-	return args.Error(0)
-}
-
-func setupAccountService() (*accountService, *MockAccountRepository, *MockAccountIdentityRepository, *jwt.JWTService, *MockResendService) {
+func setupAccountService() (*accountService, *MockAccountRepository, *MockAccountIdentityRepository, *jwt.JWTService) {
 	mockAccountRepo := &MockAccountRepository{}
 	mockAccountIdentityRepo := &MockAccountIdentityRepository{}
 
@@ -55,17 +24,15 @@ func setupAccountService() (*accountService, *MockAccountRepository, *MockAccoun
 	}
 	jwtService, _ := jwt.NewJWTService(jwtConfig)
 
-	mockResendService := &MockResendService{}
-
 	service := &accountService{
 		repository:                mockAccountRepo,
 		accountIdentityRepository: mockAccountIdentityRepo,
 		jwtService:                jwtService,
-		resendService:             mockResendService,
+		resendService:             nil,
 		fromEmail:                 "test@platform.com",
 	}
 
-	return service, mockAccountRepo, mockAccountIdentityRepo, jwtService, mockResendService
+	return service, mockAccountRepo, mockAccountIdentityRepo, jwtService
 }
 
 func TestAccountService_Login(t *testing.T) {
@@ -106,7 +73,7 @@ func TestAccountService_Login(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, mockAccountRepo, mockIdentityRepo, _, _ := setupAccountService()
+			service, mockAccountRepo, mockIdentityRepo, _ := setupAccountService()
 
 			switch tt.name {
 			case "successful login":
@@ -173,9 +140,10 @@ func TestAccountService_Register(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, mockAccountRepo, mockIdentityRepo, _, mockResend := setupAccountService()
+			service, mockAccountRepo, mockIdentityRepo, _ := setupAccountService()
 
-			if tt.name == "successful registration" {
+			switch tt.name {
+			case "successful registration":
 				mockAccountRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
 				mockAccountRepo.On("ExistsByUsername", mock.Anything, "testuser").Return(false, nil)
 				mockAccountRepo.On("Create", mock.Anything, mock.Anything).Return(CreateTestAccount(), nil)
@@ -183,11 +151,9 @@ func TestAccountService_Register(t *testing.T) {
 				otp := CreateTestOTP()
 				mockIdentityRepo.On("CreateOTP", mock.Anything, "test@example.com", OTPPurposeEmailVerification).Return(otp, nil)
 
-				emailResp := &resend.EmailResponse{ID: "email-id-123"}
-				mockResend.On("SendEmail", mock.Anything, mock.Anything).Return(emailResp, nil).Twice()
-			} else if tt.name == "email already exists" {
+			case "email already exists":
 				mockAccountRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(true, nil)
-			} else if tt.name == "username already exists" {
+			case "username already exists":
 				mockAccountRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
 				mockAccountRepo.On("ExistsByUsername", mock.Anything, "testuser").Return(true, nil)
 			}
@@ -206,13 +172,12 @@ func TestAccountService_Register(t *testing.T) {
 
 			mockAccountRepo.AssertExpectations(t)
 			mockIdentityRepo.AssertExpectations(t)
-			mockResend.AssertExpectations(t)
 		})
 	}
 }
 
 func TestAccountService_ValidateToken(t *testing.T) {
-	service, mockAccountRepo, mockIdentityRepo, jwtService, _ := setupAccountService()
+	service, mockAccountRepo, mockIdentityRepo, jwtService := setupAccountService()
 
 	customClaims := map[string]any{
 		"account_id": "507f1f77bcf86cd799439011",
@@ -291,7 +256,7 @@ func TestAccountService_ValidateToken(t *testing.T) {
 }
 
 func TestAccountService_Logout(t *testing.T) {
-	service, _, mockIdentityRepo, jwtService, _ := setupAccountService()
+	service, _, mockIdentityRepo, jwtService := setupAccountService()
 
 	customClaims := map[string]any{
 		"account_id": "507f1f77bcf86cd799439011",
@@ -340,7 +305,7 @@ func TestAccountService_Logout(t *testing.T) {
 }
 
 func TestAccountService_GetCurrentUser(t *testing.T) {
-	service, mockAccountRepo, mockIdentityRepo, jwtService, _ := setupAccountService()
+	service, mockAccountRepo, mockIdentityRepo, jwtService := setupAccountService()
 
 	customClaims := map[string]any{
 		"account_id": "507f1f77bcf86cd799439011",
@@ -429,7 +394,7 @@ func TestAccountService_VerifyEmail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, mockAccountRepo, mockIdentityRepo, _, _ := setupAccountService()
+			service, mockAccountRepo, mockIdentityRepo, _ := setupAccountService()
 
 			if tt.name == "successful verification" {
 				otp := CreateTestOTP()
@@ -459,7 +424,7 @@ func TestAccountService_VerifyEmail(t *testing.T) {
 }
 
 func TestAccountService_hashToken(t *testing.T) {
-	service, _, _, _, _ := setupAccountService()
+	service, _, _, _ := setupAccountService()
 
 	token1 := "test.token.here"
 	token2 := "different.token.here"
