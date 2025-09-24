@@ -28,9 +28,9 @@ func NewAccountModule() *AccountModule {
 		"account",
 		"1.0.0",
 		"Account management module",
-		[]string{}, // No dependencies
+		[]string{},
 	)
-	
+
 	return &AccountModule{
 		BaseModule: base,
 	}
@@ -43,7 +43,7 @@ func (m *AccountModule) RegisterServices(registry *container.ServiceRegistry) er
 	}
 
 	accountService := NewService(mongoService)
-	
+
 	if err := registry.RegisterService("account", accountService); err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (m *AccountModule) RegisterRoutes(router fiber.Router, registry *container.
 	if err != nil {
 		return err
 	}
-	
+
 	accountService := accountServiceInterface.(AccountService)
 	handler := NewHandler(accountService)
 	middleware := NewMiddleware(accountService)
