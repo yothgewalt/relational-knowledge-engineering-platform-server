@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/minio"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/neo4j"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
@@ -22,6 +23,7 @@ type ServiceRegistry struct {
 	mongoService  *mongo.MongoService
 	redisService  redis.RedisService
 	neo4jService  neo4j.Neo4jService
+	minioService  minio.MinIOService
 	resendService resend.ResendService
 	vaultService  vault.VaultService
 	jwtService    *jwt.JWTService
@@ -65,6 +67,7 @@ func (r *ServiceRegistry) RegisterInfrastructure(
 	mongoService *mongo.MongoService,
 	redisService redis.RedisService,
 	neo4jService neo4j.Neo4jService,
+	minioService minio.MinIOService,
 	resendService resend.ResendService,
 	vaultService vault.VaultService,
 	jwtService *jwt.JWTService,
@@ -75,6 +78,7 @@ func (r *ServiceRegistry) RegisterInfrastructure(
 	r.mongoService = mongoService
 	r.redisService = redisService
 	r.neo4jService = neo4jService
+	r.minioService = minioService
 	r.resendService = resendService
 	r.vaultService = vaultService
 	r.jwtService = jwtService
@@ -164,6 +168,12 @@ func (r *ServiceRegistry) GetNeo4j() neo4j.Neo4jService {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.neo4jService
+}
+
+func (r *ServiceRegistry) GetMinIO() minio.MinIOService {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.minioService
 }
 
 func (r *ServiceRegistry) GetResend() resend.ResendService {

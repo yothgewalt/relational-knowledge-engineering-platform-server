@@ -15,6 +15,7 @@ import (
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/minio"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/neo4j"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
@@ -42,6 +43,7 @@ type Container struct {
 	mongoClient  *mongo.MongoService
 	neo4jClient  neo4j.Neo4jService
 	redisClient  redis.RedisService
+	minioClient  minio.MinIOService
 	resendClient resend.ResendService
 	vaultClient  vault.VaultService
 	jwtService   *jwt.JWTService
@@ -123,6 +125,10 @@ func (c *Container) Bootstrap() error {
 
 	if err := c.initializeRedis(); err != nil {
 		c.logger.Warn().Err(err).Msg("Redis initialization failed, cache service will not be available")
+	}
+
+	if err := c.initializeMinIO(); err != nil {
+		c.logger.Warn().Err(err).Msg("MinIO initialization failed, file storage service will not be available")
 	}
 
 	if err := c.initializeResend(); err != nil {
@@ -404,6 +410,79 @@ func (c *Container) initializeRedis() error {
 	return nil
 }
 
+func (c *Container) initializeMinIO() error {
+	minioConfig := minio.MinIOConfig{
+		Endpoint:        c.config.MinIO.Endpoint,
+		AccessKeyID:     c.config.MinIO.AccessKey,
+		SecretAccessKey: c.config.MinIO.SecretKey,
+		UseSSL:          c.config.MinIO.UseSSL,
+		BucketName:      c.config.MinIO.BucketName,
+	}
+
+	c.logger.Info().
+		Str("endpoint", minioConfig.Endpoint).
+		Str("access_key", minioConfig.AccessKeyID).
+		Bool("use_ssl", minioConfig.UseSSL).
+		Str("bucket_name", minioConfig.BucketName).
+		Msg("Attempting MinIO connection")
+
+	client, err := minio.NewMinIOService(minioConfig)
+	if err != nil {
+		c.logger.Error().
+			Err(err).
+			Str("endpoint", minioConfig.Endpoint).
+			Str("bucket_name", minioConfig.BucketName).
+			Msg("Failed to create MinIO client")
+		return fmt.Errorf("failed to create MinIO client: %w", err)
+	}
+
+	c.logger.Debug().Msg("MinIO client created successfully, performing health check")
+
+	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer cancel()
+
+	health := client.HealthCheck(ctx)
+
+	c.logger.Info().
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("bucket_exists", health.BucketExists).
+		Dur("latency", health.Latency).
+		Str("endpoint", health.Endpoint).
+		Str("bucket_name", health.BucketName).
+		Str("error", health.Error).
+		Msg("MinIO health check completed")
+
+	if !health.Connected || !health.Authenticated || !health.BucketExists {
+		c.logger.Error().
+			Str("error", health.Error).
+			Str("endpoint", minioConfig.Endpoint).
+			Str("bucket_name", minioConfig.BucketName).
+			Bool("connected", health.Connected).
+			Bool("authenticated", health.Authenticated).
+			Bool("bucket_exists", health.BucketExists).
+			Msg("MinIO health check failed")
+		return fmt.Errorf("MinIO health check failed: %s", health.Error)
+	}
+
+	c.minioClient = client
+	c.addShutdownFunc(func() error {
+		return client.Close()
+	})
+
+	c.logger.Info().
+		Str("endpoint", minioConfig.Endpoint).
+		Str("bucket_name", minioConfig.BucketName).
+		Str("access_key", minioConfig.AccessKeyID).
+		Dur("latency", health.Latency).
+		Bool("connected", health.Connected).
+		Bool("authenticated", health.Authenticated).
+		Bool("bucket_exists", health.BucketExists).
+		Msg("MinIO connection fully established - connected, authenticated, and bucket accessible")
+
+	return nil
+}
+
 func (c *Container) initializeVault() error {
 	if c.config == nil {
 		return fmt.Errorf("config is not loaded")
@@ -554,6 +633,12 @@ func (c *Container) GetNeo4jClient() neo4j.Neo4jService {
 	return c.neo4jClient
 }
 
+func (c *Container) GetMinIOClient() minio.MinIOService {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.minioClient
+}
+
 func (c *Container) GetResendClient() resend.ResendService {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -624,6 +709,29 @@ func (c *Container) HealthCheck() HealthStatus {
 
 		services = append(services, ServiceHealth{
 			Name:      "redis",
+			Status:    status,
+			Message:   message,
+			Timestamp: time.Now(),
+		})
+	}
+
+	if c.minioClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		health := c.minioClient.HealthCheck(ctx)
+		cancel()
+
+		status := "healthy"
+		message := ""
+		if !health.Connected || !health.Authenticated || !health.BucketExists {
+			status = "unhealthy"
+			message = health.Error
+			if overallStatus != "unhealthy" {
+				overallStatus = "degraded"
+			}
+		}
+
+		services = append(services, ServiceHealth{
+			Name:      "minio",
 			Status:    status,
 			Message:   message,
 			Timestamp: time.Now(),
@@ -763,6 +871,7 @@ func (c *Container) initializeRegistry() error {
 		c.mongoClient,
 		c.redisClient,
 		c.neo4jClient,
+		c.minioClient,
 		c.resendClient,
 		c.vaultClient,
 		c.jwtService,

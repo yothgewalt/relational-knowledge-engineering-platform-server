@@ -16,6 +16,7 @@ type Config struct {
 	Mongo        MongoConfig        `json:"mongo"`
 	Redis        RedisConfig        `json:"redis"`
 	Neo4j        Neo4jConfig        `json:"neo4j"`
+	MinIO        MinIOConfig        `json:"minio"`
 	Features     FeaturesConfig     `json:"features"`
 	VaultSecrets VaultSecretsConfig `json:"vault_secrets"`
 	Vault        VaultConfig        `json:"vault"`
@@ -27,6 +28,7 @@ type VaultSecretsConfig struct {
 	MongoSecretPath  string `json:"mongo_secret_path"`
 	RedisSecretPath  string `json:"redis_secret_path"`
 	Neo4jSecretPath  string `json:"neo4j_secret_path"`
+	MinioSecretPath  string `json:"minio_secret_path"`
 	ResendSecretPath string `json:"resend_secret_path"`
 	JwtSecretPath    string `json:"jwt_secret_path"`
 }
@@ -56,6 +58,14 @@ type Neo4jConfig struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Database string `json:"database"`
+}
+
+type MinIOConfig struct {
+	Endpoint   string `json:"endpoint"`
+	AccessKey  string `json:"access_key"`
+	SecretKey  string `json:"secret_key"`
+	UseSSL     bool   `json:"use_ssl"`
+	BucketName string `json:"bucket_name"`
 }
 
 type FeaturesConfig struct {
@@ -158,6 +168,12 @@ func loadVaultSecretsConfig() (VaultSecretsConfig, error) {
 		return vaultConfig, err
 	}
 	vaultConfig.Neo4jSecretPath = neo4jPath
+
+	minioPath, err := env.Get("VAULT_MINIO_SECRET_PATH", "secret/storage/minio")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.MinioSecretPath = minioPath
 
 	resendPath, err := env.Get("VAULT_RESEND_SECRET_PATH", "secret/email/resend")
 	if err != nil {
@@ -328,6 +344,82 @@ func loadNeo4jConfig(vaultConfig VaultSecretsConfig) (Neo4jConfig, error) {
 	return neo4jConfig, nil
 }
 
+func loadMinioConfig(vaultConfig VaultSecretsConfig) (MinIOConfig, error) {
+	var minioConfig MinIOConfig
+
+	logger.Debug().
+		Str("vault_path", vaultConfig.MinioSecretPath).
+		Msg("Loading MinIO configuration")
+
+	endpoint, err := getFromVaultOrEnv(vaultConfig.MinioSecretPath, "endpoint", "MINIO_ENDPOINT", "localhost:9000")
+	if err != nil {
+		return minioConfig, err
+	}
+	minioConfig.Endpoint = endpoint
+
+	accessKey, err := getFromVaultOrEnv(vaultConfig.MinioSecretPath, "access_key", "MINIO_ACCESS_KEY", "minio")
+	if err != nil {
+		return minioConfig, err
+	}
+	minioConfig.AccessKey = accessKey
+
+	secretKey, err := getFromVaultOrEnv(vaultConfig.MinioSecretPath, "secret_key", "MINIO_SECRET_KEY", "")
+	if err != nil {
+		return minioConfig, err
+	}
+	minioConfig.SecretKey = secretKey
+
+	var useSSL bool
+	if vaultClient != nil && vaultConfig.MinioSecretPath != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		secretData, err := vaultClient.GetSecret(ctx, vaultConfig.MinioSecretPath)
+		if err == nil {
+			if value, ok := secretData["use_ssl"]; ok {
+				if boolValue, ok := value.(bool); ok {
+					useSSL = boolValue
+				} else if strValue, ok := value.(string); ok {
+					if parsed, parseErr := fmt.Sscanf(strValue, "%t", &useSSL); parseErr != nil || parsed != 1 {
+						logger.Warn().Msg("Could not parse use_ssl value from Vault, falling back to environment variable")
+						useSSL, err = env.Get("MINIO_USE_SSL", false)
+						if err != nil {
+							return minioConfig, err
+						}
+					}
+				}
+			} else {
+				useSSL, err = env.Get("MINIO_USE_SSL", false)
+				if err != nil {
+					return minioConfig, err
+				}
+			}
+		} else {
+			logger.Warn().
+				Str("vault_path", vaultConfig.MinioSecretPath).
+				Msg("Could not get use_ssl from Vault, falling back to environment variable")
+			useSSL, err = env.Get("MINIO_USE_SSL", false)
+			if err != nil {
+				return minioConfig, err
+			}
+		}
+	} else {
+		useSSL, err = env.Get("MINIO_USE_SSL", false)
+		if err != nil {
+			return minioConfig, err
+		}
+	}
+	minioConfig.UseSSL = useSSL
+
+	bucketName, err := getFromVaultOrEnv(vaultConfig.MinioSecretPath, "bucket_name", "MINIO_BUCKET_NAME", "files")
+	if err != nil {
+		return minioConfig, err
+	}
+	minioConfig.BucketName = bucketName
+
+	return minioConfig, nil
+}
+
 func loadFeaturesConfig() (FeaturesConfig, error) {
 	var featuresConfig FeaturesConfig
 
@@ -486,6 +578,12 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.Neo4j = neo4jConfig
+
+	minioConfig, err := loadMinioConfig(vaultSecretsConfig)
+	if err != nil {
+		return nil, err
+	}
+	config.MinIO = minioConfig
 
 	featuresConfig, err := loadFeaturesConfig()
 	if err != nil {
