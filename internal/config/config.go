@@ -20,6 +20,7 @@ type Config struct {
 	VaultSecrets VaultSecretsConfig `json:"vault_secrets"`
 	Vault        VaultConfig        `json:"vault"`
 	Resend       ResendConfig       `json:"resend"`
+	JWT          JWTConfig          `json:"jwt"`
 }
 
 type VaultSecretsConfig struct {
@@ -27,6 +28,7 @@ type VaultSecretsConfig struct {
 	RedisSecretPath  string `json:"redis_secret_path"`
 	Neo4jSecretPath  string `json:"neo4j_secret_path"`
 	ResendSecretPath string `json:"resend_secret_path"`
+	JwtSecretPath    string `json:"jwt_secret_path"`
 }
 
 type ServerConfig struct {
@@ -68,6 +70,12 @@ type VaultConfig struct {
 
 type ResendConfig struct {
 	ApiKey string `json:"api_key"`
+}
+
+type JWTConfig struct {
+	Secret     string        `json:"secret"`
+	Expiration time.Duration `json:"expiration"`
+	Issuer     string        `json:"issuer"`
 }
 
 var (
@@ -156,6 +164,12 @@ func loadVaultSecretsConfig() (VaultSecretsConfig, error) {
 		return vaultConfig, err
 	}
 	vaultConfig.ResendSecretPath = resendPath
+
+	jwtPath, err := env.Get("VAULT_JWT_SECRET_PATH", "secret/jwt")
+	if err != nil {
+		return vaultConfig, err
+	}
+	vaultConfig.JwtSecretPath = jwtPath
 
 	return vaultConfig, nil
 }
@@ -366,6 +380,74 @@ func loadResendConfig(vaultSecretsConfig VaultSecretsConfig) (ResendConfig, erro
 	return resendConfig, nil
 }
 
+func loadJWTConfig(vaultSecretsConfig VaultSecretsConfig) (JWTConfig, error) {
+	var jwtConfig JWTConfig
+
+	secret, err := getFromVaultOrEnv(vaultSecretsConfig.JwtSecretPath, "secret", "JWT_SECRET", "default-jwt-secret-change-in-production")
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("vault_path", vaultSecretsConfig.JwtSecretPath).
+			Msg("Failed to load JWT secret")
+		return jwtConfig, err
+	}
+	jwtConfig.Secret = secret
+
+	var expiration time.Duration
+	if vaultClient != nil && vaultSecretsConfig.JwtSecretPath != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		secretData, err := vaultClient.GetSecret(ctx, vaultSecretsConfig.JwtSecretPath)
+		if err == nil {
+			if value, ok := secretData["expiration"]; ok {
+				if strValue, ok := value.(string); ok {
+					if parsed, parseErr := time.ParseDuration(strValue); parseErr == nil {
+						expiration = parsed
+					} else {
+						logger.Warn().Msg("Could not parse JWT expiration from Vault, falling back to environment variable")
+						expiration, err = env.Get("JWT_EXPIRATION", 24*time.Hour)
+						if err != nil {
+							return jwtConfig, err
+						}
+					}
+				}
+			} else {
+				expiration, err = env.Get("JWT_EXPIRATION", 24*time.Hour)
+				if err != nil {
+					return jwtConfig, err
+				}
+			}
+		} else {
+			logger.Warn().
+				Str("vault_path", vaultSecretsConfig.JwtSecretPath).
+				Msg("Could not get JWT expiration from Vault, falling back to environment variable")
+			expiration, err = env.Get("JWT_EXPIRATION", 24*time.Hour)
+			if err != nil {
+				return jwtConfig, err
+			}
+		}
+	} else {
+		expiration, err = env.Get("JWT_EXPIRATION", 24*time.Hour)
+		if err != nil {
+			return jwtConfig, err
+		}
+	}
+	jwtConfig.Expiration = expiration
+
+	issuer, err := getFromVaultOrEnv(vaultSecretsConfig.JwtSecretPath, "issuer", "JWT_ISSUER", "relational-knowledge-engineering-platform")
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("vault_path", vaultSecretsConfig.JwtSecretPath).
+			Msg("Failed to load JWT issuer")
+		return jwtConfig, err
+	}
+	jwtConfig.Issuer = issuer
+
+	return jwtConfig, nil
+}
+
 func loadConfig() (*Config, error) {
 	config := &Config{}
 
@@ -416,6 +498,12 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.Resend = resendConfig
+
+	jwtConfig, err := loadJWTConfig(vaultSecretsConfig)
+	if err != nil {
+		return nil, err
+	}
+	config.JWT = jwtConfig
 
 	return config, nil
 }
