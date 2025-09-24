@@ -9,9 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
 
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/config"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/log"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/neo4j"
@@ -41,8 +43,14 @@ type Container struct {
 	neo4jClient  neo4j.Neo4jService
 	redisClient  redis.RedisService
 	resendClient resend.ResendService
+	vaultClient  vault.VaultService
+	jwtService   *jwt.JWTService
 
-	vaultClient vault.VaultService
+	registry       *ServiceRegistry
+	moduleManager  *ModuleManager
+	pendingModules []Module
+
+	app *fiber.App
 
 	startTime time.Time
 	mu        sync.RWMutex
@@ -67,10 +75,11 @@ func New(opts *Options) *Container {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Container{
-		startTime:     time.Now(),
-		shutdownFuncs: make([]func() error, 0),
-		ctx:           ctx,
-		cancel:        cancel,
+		startTime:      time.Now(),
+		shutdownFuncs:  make([]func() error, 0),
+		pendingModules: make([]Module, 0),
+		ctx:            ctx,
+		cancel:         cancel,
 	}
 }
 
@@ -118,6 +127,26 @@ func (c *Container) Bootstrap() error {
 
 	if err := c.initializeResend(); err != nil {
 		c.logger.Warn().Err(err).Msg("Resend initialization failed, email service will not be available")
+	}
+
+	if err := c.initializeJWT(); err != nil {
+		return fmt.Errorf("failed to initialize JWT service: %w", err)
+	}
+
+	if err := c.initializeRegistry(); err != nil {
+		return fmt.Errorf("failed to initialize service registry: %w", err)
+	}
+
+	if err := c.initializeServices(); err != nil {
+		return fmt.Errorf("failed to initialize application services: %w", err)
+	}
+
+	if err := c.initializeRouter(); err != nil {
+		return fmt.Errorf("failed to initialize router: %w", err)
+	}
+
+	if err := c.startServer(); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
 	}
 
 	c.running = true
@@ -701,4 +730,116 @@ func (c *Container) IsRunning() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.running
+}
+
+func (c *Container) initializeJWT() error {
+	jwtConfig := jwt.JWTConfig{
+		SecretKey:     os.Getenv("JWT_SECRET_KEY"),
+		TokenDuration: 24 * time.Hour,
+		Issuer:        "relational-knowledge-platform",
+	}
+
+	if jwtConfig.SecretKey == "" {
+		jwtConfig.SecretKey = "default-secret-key-change-in-production"
+		c.logger.Warn().Msg("JWT secret key not set, using default (change in production)")
+	}
+
+	jwtService, err := jwt.NewJWTService(jwtConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create JWT service: %w", err)
+	}
+
+	c.jwtService = jwtService
+	c.logger.Info().Msg("JWT service initialized")
+	
+	return nil
+}
+
+func (c *Container) initializeRegistry() error {
+	c.registry = NewServiceRegistry(c.logger)
+	c.moduleManager = NewModuleManager(c.registry, c.logger)
+
+	c.registry.RegisterInfrastructure(
+		c.mongoClient,
+		c.redisClient,
+		c.neo4jClient,
+		c.resendClient,
+		c.vaultClient,
+		c.jwtService,
+	)
+
+	for _, module := range c.pendingModules {
+		if err := c.moduleManager.RegisterModule(module); err != nil {
+			return fmt.Errorf("failed to register pending module: %w", err)
+		}
+	}
+	c.pendingModules = nil
+
+	c.logger.Info().Msg("Service registry and module manager initialized")
+	return nil
+}
+
+func (c *Container) RegisterModule(module Module) error {
+	if c.moduleManager == nil {
+		c.pendingModules = append(c.pendingModules, module)
+		return nil
+	}
+	return c.moduleManager.RegisterModule(module)
+}
+
+func (c *Container) initializeServices() error {
+	if err := c.moduleManager.InitializeServices(); err != nil {
+		return fmt.Errorf("failed to initialize module services: %w", err)
+	}
+
+	if err := c.moduleManager.InitializeMiddleware(); err != nil {
+		return fmt.Errorf("failed to initialize module middleware: %w", err)
+	}
+
+	c.logger.Info().Msg("All services initialized via module system")
+	return nil
+}
+
+func (c *Container) initializeRouter() error {
+	c.app = fiber.New(fiber.Config{
+		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+			}
+			return ctx.Status(code).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		},
+	})
+
+	apiV1 := c.app.Group("/api/v1")
+	
+	if err := c.moduleManager.InitializeRoutes(apiV1); err != nil {
+		return fmt.Errorf("failed to initialize routes: %w", err)
+	}
+
+	c.logger.Info().Msg("Router initialized via module system")
+	return nil
+}
+
+func (c *Container) startServer() error {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+
+	c.logger.Info().Str("port", port).Msg("Starting HTTP server")
+
+	go func() {
+		if err := c.app.Listen(":" + port); err != nil {
+			c.logger.Error().Err(err).Msg("Failed to start server")
+		}
+	}()
+
+	c.addShutdownFunc(func() error {
+		return c.app.Shutdown()
+	})
+
+	return nil
 }

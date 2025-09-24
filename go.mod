@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/hashicorp/consul/api v1.32.3
 	github.com/hashicorp/vault/api v1.21.0
 	github.com/joho/godotenv v1.5.1
@@ -13,6 +14,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/swaggo/swag v1.16.6
 	go.mongodb.org/mongo-driver v1.13.1
+	golang.org/x/crypto v0.42.0
 )
 
 require (
@@ -71,7 +73,6 @@ require (
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
-	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/exp v0.0.0-20250808145144-a408d31f581a // indirect
 	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
