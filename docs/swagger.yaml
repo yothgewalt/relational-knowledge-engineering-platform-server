@@ -1,4 +1,775 @@
+basePath: /
+definitions:
+  account.ChangePasswordRequest:
+    properties:
+      new_password:
+        minLength: 8
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  account.CreateAccountRequest:
+    properties:
+      avatar:
+        type: string
+      email:
+        type: string
+      first_name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      last_name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - username
+    type: object
+  account.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  account.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  account.RegisterRequest:
+    properties:
+      avatar:
+        type: string
+      email:
+        type: string
+      first_name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      last_name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      password:
+        minLength: 8
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    - username
+    type: object
+  account.ResendVerificationRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  account.ResetPasswordRequest:
+    properties:
+      email:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+      otp:
+        type: string
+    required:
+    - email
+    - new_password
+    - otp
+    type: object
+  account.UpdateAccountRequest:
+    properties:
+      avatar:
+        type: string
+      first_name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      is_active:
+        type: boolean
+      last_name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    type: object
+  account.VerifyEmailRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+host: localhost:8080
 info:
-  contact: {}
-paths: {}
+  contact:
+    email: support@example.com
+    name: API Support
+  description: A comprehensive API for the Relational Knowledge Engineering Platform,
+    providing account management, authentication, and telemetry services.
+  title: Relational Knowledge Engineering Platform API
+  version: 1.0.0
+paths:
+  /accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of accounts with optional filters (requires
+        authentication)
+      parameters:
+      - description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Filter by email
+        in: query
+        name: email
+        type: string
+      - description: Filter by username
+        in: query
+        name: username
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Accounts retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List accounts
+      tags:
+      - accounts
+    post:
+      consumes:
+      - application/json
+      description: Create a new account (admin operation)
+      parameters:
+      - description: Account creation details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.CreateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Account created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict - account already exists
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create account
+      tags:
+      - accounts
+  /accounts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete account by ID (requires authentication and ownership validation)
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account deleted successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Account not found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete account
+      tags:
+      - accounts
+    get:
+      consumes:
+      - application/json
+      description: Get account information by account ID (requires authentication
+        and ownership validation)
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Account not found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get account by ID
+      tags:
+      - accounts
+    put:
+      consumes:
+      - application/json
+      description: Update account information (requires authentication and ownership
+        validation)
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Account update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account updated successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Account not found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict - username already taken
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update account
+      tags:
+      - accounts
+  /accounts/change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change user's password (requires authentication)
+      parameters:
+      - description: Change password details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - incorrect password
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - account inactive
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - authentication
+  /accounts/email:
+    get:
+      consumes:
+      - application/json
+      description: Get account information by email address (optional authentication)
+      parameters:
+      - description: Email address
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request - email parameter required
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Account not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get account by email
+      tags:
+      - accounts
+  /accounts/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Send password reset OTP to user's email address
+      parameters:
+      - description: Forgot password details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset email sent
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Request password reset
+      tags:
+      - authentication
+  /accounts/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - invalid credentials
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden - account inactive
+          schema:
+            additionalProperties: true
+            type: object
+      summary: User login
+      tags:
+      - authentication
+  /accounts/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout user by invalidating the session token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - authentication
+  /accounts/me:
+    get:
+      consumes:
+      - application/json
+      description: Get current authenticated user's information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Current user retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - accounts
+  /accounts/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh the provided JWT token to extend session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - token refresh failed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Refresh JWT token
+      tags:
+      - authentication
+  /accounts/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account with email verification
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Account created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict - account already exists
+          schema:
+            additionalProperties: true
+            type: object
+      summary: User registration
+      tags:
+      - authentication
+  /accounts/resend-verification:
+    post:
+      consumes:
+      - application/json
+      description: Resend email verification OTP to user's email address
+      parameters:
+      - description: Resend verification details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.ResendVerificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Account not found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Email already verified
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Resend email verification
+      tags:
+      - authentication
+  /accounts/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset user's password using OTP code
+      parameters:
+      - description: Password reset details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - invalid or expired OTP
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reset password
+      tags:
+      - authentication
+  /accounts/username:
+    get:
+      consumes:
+      - application/json
+      description: Get account information by username (optional authentication)
+      parameters:
+      - description: Username
+        in: query
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request - username parameter required
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Account not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get account by username
+      tags:
+      - accounts
+  /accounts/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validate the provided JWT token and return user information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token is valid
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - invalid or expired token
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Validate JWT token
+      tags:
+      - authentication
+  /accounts/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Verify user's email address with OTP code
+      parameters:
+      - description: Email verification details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/account.VerifyEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - invalid or expired OTP
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Verify email address
+      tags:
+      - authentication
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

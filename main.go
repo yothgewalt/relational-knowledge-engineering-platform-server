@@ -8,6 +8,7 @@ import (
 	_ "github.com/yothgewalt/relational-knowledge-engineering-platform-server/docs"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/container"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/account"
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/docs"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/internal/module/telemetry"
 )
 
@@ -36,6 +37,11 @@ func main() {
 
 	telemetryModule := telemetry.NewTelemetryModule()
 	if err := c.RegisterModule(telemetryModule); err != nil {
+		panic(err)
+	}
+
+	docsModule := docs.NewDocsModule()
+	if err := c.RegisterModule(docsModule); err != nil {
 		panic(err)
 	}
 
