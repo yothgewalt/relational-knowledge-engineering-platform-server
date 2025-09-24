@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/gofiber/swagger v1.1.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/hashicorp/consul/api v1.32.3
 	github.com/hashicorp/vault/api v1.21.0
@@ -55,7 +56,6 @@ require (
 	github.com/go-openapi/swag/typeutils v0.24.0 // indirect
 	github.com/go-openapi/swag/yamlutils v0.24.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
-	github.com/gofiber/swagger v1.1.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
