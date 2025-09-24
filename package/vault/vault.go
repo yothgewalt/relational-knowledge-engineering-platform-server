@@ -205,7 +205,6 @@ func (v *VaultClient) DeleteSecret(ctx context.Context, path string) error {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	// Transform path for KV v2 engine - use metadata path for deletion
 	kvv2Path := transformMetadataPathForKVv2(path)
 
 	_, err := v.client.Logical().DeleteWithContext(ctx, kvv2Path)

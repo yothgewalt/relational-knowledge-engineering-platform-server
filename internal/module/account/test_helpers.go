@@ -83,6 +83,14 @@ func (m *MockAccountRepository) ExistsByUsername(ctx context.Context, username s
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockAccountRepository) UpdatePasswordHash(ctx context.Context, id primitive.ObjectID, passwordHash string) (*Account, error) {
+	args := m.Called(ctx, id, passwordHash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Account), args.Error(1)
+}
+
 type MockAccountService struct {
 	mock.Mock
 }

@@ -232,7 +232,7 @@ func (r *RedisClient) GetSet(ctx context.Context, key string, value interface{})
 
 	result, err := r.client.GetSet(ctx, key, value).Result()
 	if err == redis.Nil {
-		return "", nil // GetSet returns empty string for non-existent keys
+		return "", nil
 	}
 	return result, err
 }

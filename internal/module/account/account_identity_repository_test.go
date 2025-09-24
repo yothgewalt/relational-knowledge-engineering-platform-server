@@ -587,7 +587,6 @@ func TestGenerateOTPCode(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, code, OTPLength)
 
-		// Check all characters are digits
 		for _, char := range code {
 			assert.True(t, char >= '0' && char <= '9', "OTP should contain only digits")
 		}

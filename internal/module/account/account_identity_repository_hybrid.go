@@ -45,7 +45,6 @@ func NewHybridAccountIdentityRepository(
 		hybrid.otpRepo = mongoRepo
 	}
 
-	// Configure Session repository
 	if config.UseCacheForSession && cacheService != nil {
 		hybrid.sessionRepo = NewCacheSessionRepository(cacheService)
 	} else {
@@ -182,5 +181,3 @@ func (h *HybridAccountIdentityRepository) CleanupExpiredSessions(ctx context.Con
 
 	return nil
 }
-
-

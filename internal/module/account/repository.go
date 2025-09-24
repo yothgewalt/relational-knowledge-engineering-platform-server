@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -19,6 +20,7 @@ type AccountRepository interface {
 	GetByEmail(ctx context.Context, email string) (*Account, error)
 	GetByUsername(ctx context.Context, username string) (*Account, error)
 	Update(ctx context.Context, id primitive.ObjectID, updateData bson.M) (*Account, error)
+	UpdatePasswordHash(ctx context.Context, id primitive.ObjectID, passwordHash string) (*Account, error)
 	Delete(ctx context.Context, id primitive.ObjectID) error
 	List(ctx context.Context, filter bson.M, pagination mongo.PaginationOptions) (*mongo.PaginatedResult[Account], error)
 	Count(ctx context.Context, filter bson.M) (int64, error)
@@ -103,6 +105,15 @@ func (r *accountRepository) Update(ctx context.Context, id primitive.ObjectID, u
 	}
 	
 	return result, nil
+}
+
+func (r *accountRepository) UpdatePasswordHash(ctx context.Context, id primitive.ObjectID, passwordHash string) (*Account, error) {
+	updateData := bson.M{
+		"password_hash": passwordHash,
+		"updated_at":    time.Now(),
+	}
+	
+	return r.Update(ctx, id, updateData)
 }
 
 func (r *accountRepository) Delete(ctx context.Context, id primitive.ObjectID) error {

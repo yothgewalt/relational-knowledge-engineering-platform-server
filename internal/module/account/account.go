@@ -56,12 +56,11 @@ func NewAccountModule(fromEmail string) *AccountModule {
 	return &AccountModule{
 		BaseModule:         base,
 		fromEmail:          fromEmail,
-		useCacheForOTP:     true, // Default to using cache for OTP
-		useCacheForSession: true, // Default to using cache for sessions
+		useCacheForOTP:     true,
+		useCacheForSession: true,
 	}
 }
 
-// WithCacheConfig configures cache usage for the account module
 func (m *AccountModule) WithCacheConfig(useCacheForOTP, useCacheForSession bool) *AccountModule {
 	m.useCacheForOTP = useCacheForOTP
 	m.useCacheForSession = useCacheForSession

@@ -8,8 +8,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"golang.org/x/crypto/bcrypt"
 
+	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/argon2"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/jwt"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/mongo"
 	"github.com/yothgewalt/relational-knowledge-engineering-platform-server/package/redis"
@@ -64,7 +64,6 @@ func NewAccountService(
 	}
 }
 
-// NewAccountServiceWithCache creates an account service with optional cache support
 func NewAccountServiceWithCache(
 	mongoService *mongo.MongoService,
 	cacheService redis.RedisService,
@@ -75,7 +74,6 @@ func NewAccountServiceWithCache(
 ) AccountService {
 	repository := NewAccountRepository(mongoService)
 
-	// Use hybrid repository that can leverage cache for OTP and Session management
 	accountIdentityRepository := NewHybridAccountIdentityRepository(
 		mongoService,
 		cacheService,
@@ -299,23 +297,24 @@ func (s *accountService) ListAccounts(ctx context.Context, req *ListAccountsRequ
 }
 
 func (s *accountService) Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error) {
-	accountResp, err := s.GetAccountByEmail(ctx, req.Email)
-	if err != nil {
+	account, err := s.repository.GetByEmail(ctx, req.Email)
+	if err != nil || account == nil {
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
-	if !accountResp.IsActive {
+	if !account.IsActive {
 		return nil, fmt.Errorf("account is inactive")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(req.Password), []byte(req.Password)); err != nil {
+	isValid, err := argon2.VerifyPassword(req.Password, account.PasswordHash)
+	if err != nil || !isValid {
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
 	claims := &AccountJWTClaims{
-		AccountID: accountResp.ID,
-		Email:     accountResp.Email,
-		Username:  accountResp.Username,
+		AccountID: account.ID.Hex(),
+		Email:     account.Email,
+		Username:  account.Username,
 	}
 
 	token, err := s.jwtService.Generate(claims.ToCustomClaims())
@@ -324,7 +323,7 @@ func (s *accountService) Login(ctx context.Context, req *LoginRequest, userAgent
 	}
 
 	session := &Session{
-		AccountID: accountResp.ID,
+		AccountID: account.ID.Hex(),
 		TokenHash: s.hashToken(token),
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		UserAgent: userAgent,
@@ -338,7 +337,7 @@ func (s *accountService) Login(ctx context.Context, req *LoginRequest, userAgent
 
 	return &LoginResponse{
 		Token:   token,
-		Account: accountResp,
+		Account: account.ToResponse(),
 	}, nil
 }
 
@@ -354,20 +353,40 @@ func (s *accountService) Logout(ctx context.Context, token string) error {
 }
 
 func (s *accountService) Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error) {
-	_, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashedPassword, err := argon2.HashPassword(req.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	createAccountReq := &CreateAccountRequest{
-		Email:     req.Email,
-		Username:  req.Username,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Avatar:    req.Avatar,
+	account := &Account{
+		Email:        req.Email,
+		Username:     req.Username,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		Avatar:       req.Avatar,
+		PasswordHash: hashedPassword,
+		IsActive:     false,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
-	accountResp, err := s.CreateAccount(ctx, createAccountReq)
+	exists, err := s.repository.ExistsByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check email existence: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("account with email %s already exists", req.Email)
+	}
+
+	exists, err = s.repository.ExistsByUsername(ctx, req.Username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check username existence: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("account with username %s already exists", req.Username)
+	}
+
+	createdAccount, err := s.repository.Create(ctx, account)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create account: %w", err)
 	}
@@ -408,7 +427,7 @@ func (s *accountService) Register(ctx context.Context, req *RegisterRequest) (*R
 	}
 
 	return &RegisterResponse{
-		Account: accountResp,
+		Account: createdAccount.ToResponse(),
 		Message: "Registration successful. Please check your email for verification code.",
 	}, nil
 }
@@ -515,19 +534,22 @@ func (s *accountService) ResetPassword(ctx context.Context, req *ResetPasswordRe
 		return fmt.Errorf("password reset failed: %w", err)
 	}
 
-	accountResp, err := s.GetAccountByEmail(ctx, req.Email)
-	if err != nil {
+	account, err := s.repository.GetByEmail(ctx, req.Email)
+	if err != nil || account == nil {
 		return fmt.Errorf("account not found: %w", err)
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hashedPassword, err := argon2.HashPassword(req.NewPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_ = string(hashedPassword)
+	_, err = s.repository.UpdatePasswordHash(ctx, account.ID, hashedPassword)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
 
-	err = s.accountIdentityRepository.DeactivateAllUserSessions(ctx, accountResp.ID)
+	err = s.accountIdentityRepository.DeactivateAllUserSessions(ctx, account.ID.Hex())
 	if err != nil {
 		fmt.Printf("Failed to deactivate user sessions: %v\n", err)
 	}
@@ -557,25 +579,34 @@ func (s *accountService) ResetPassword(ctx context.Context, req *ResetPasswordRe
 }
 
 func (s *accountService) ChangePassword(ctx context.Context, accountID string, req *ChangePasswordRequest) error {
-	accountResp, err := s.GetAccountByID(ctx, accountID)
+	objectID, err := primitive.ObjectIDFromHex(accountID)
 	if err != nil {
+		return fmt.Errorf("invalid account ID format: %w", err)
+	}
+
+	account, err := s.repository.GetByID(ctx, objectID)
+	if err != nil || account == nil {
 		return fmt.Errorf("account not found: %w", err)
 	}
 
-	if !accountResp.IsActive {
+	if !account.IsActive {
 		return fmt.Errorf("account is inactive")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(req.OldPassword), []byte(req.OldPassword)); err != nil {
+	isValid, err := argon2.VerifyPassword(req.OldPassword, account.PasswordHash)
+	if err != nil || !isValid {
 		return fmt.Errorf("current password is incorrect")
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hashedPassword, err := argon2.HashPassword(req.NewPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_ = string(hashedPassword)
+	_, err = s.repository.UpdatePasswordHash(ctx, account.ID, hashedPassword)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
 
 	err = s.accountIdentityRepository.DeactivateAllUserSessions(ctx, accountID)
 	if err != nil {
@@ -586,7 +617,7 @@ func (s *accountService) ChangePassword(ctx context.Context, accountID string, r
 		template := GetPasswordChangeConfirmationTemplate()
 		emailReq := &resend.EmailRequest{
 			From:    s.fromEmail,
-			To:      []string{accountResp.Email},
+			To:      []string{account.Email},
 			Subject: template.Subject,
 			Html:    template.HtmlBody,
 			Text:    template.TextBody,

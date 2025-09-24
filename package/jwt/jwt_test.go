@@ -205,10 +205,6 @@ func TestJWTService_Refresh(t *testing.T) {
 		t.Errorf("Refresh() returned empty token")
 	}
 
-	// Note: tokens might be the same if generated within the same second
-	// This is expected behavior since the same claims produce the same token
-	// We just verify that refresh works without error
-
 	claims, err := service.Verify(refreshedToken)
 	if err != nil {
 		t.Fatalf("Verify() refreshed token error = %v", err)
@@ -316,7 +312,7 @@ func TestJWTClaims_CustomClaimMethods(t *testing.T) {
 	}
 
 	claims.SetCustomClaim("test_key", "test_value")
-	
+
 	value, exists = claims.GetCustomClaim("test_key")
 	if !exists {
 		t.Errorf("GetCustomClaim() should return true for existing claim")

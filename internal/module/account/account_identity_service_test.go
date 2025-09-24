@@ -186,7 +186,7 @@ func TestAccountService_Register(t *testing.T) {
 				mockIdentityRepo.On("CreateOTP", mock.Anything, "test@example.com", OTPPurposeEmailVerification).Return(otp, nil)
 
 				emailResp := &resend.EmailResponse{ID: "email-id-123"}
-				mockResend.On("SendEmail", mock.Anything, mock.Anything).Return(emailResp, nil).Twice() // Welcome + verification emails
+				mockResend.On("SendEmail", mock.Anything, mock.Anything).Return(emailResp, nil).Twice()
 			} else if tt.name == "email already exists" {
 				mockAccountRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(true, nil)
 			} else if tt.name == "username already exists" {

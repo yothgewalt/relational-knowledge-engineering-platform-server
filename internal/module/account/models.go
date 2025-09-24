@@ -13,7 +13,7 @@ type Account struct {
 	FirstName    string             `json:"first_name" bson:"first_name"`
 	LastName     string             `json:"last_name" bson:"last_name"`
 	Avatar       string             `json:"avatar" bson:"avatar"`
-	PasswordHash string             `json:"-" bson:"password_hash"` // Password hash - not exposed in JSON
+	PasswordHash string             `json:"-" bson:"password_hash"`
 	IsActive     bool               `json:"is_active" bson:"is_active"`
 	CreatedAt    time.Time          `json:"created_at" bson:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at" bson:"updated_at"`
@@ -71,19 +71,19 @@ func (c *AccountJWTClaims) ToCustomClaims() map[string]any {
 
 func NewAccountJWTClaimsFromCustom(customClaims map[string]any) *AccountJWTClaims {
 	claims := &AccountJWTClaims{}
-	
+
 	if accountID, ok := customClaims["account_id"].(string); ok {
 		claims.AccountID = accountID
 	}
-	
+
 	if email, ok := customClaims["email"].(string); ok {
 		claims.Email = email
 	}
-	
+
 	if username, ok := customClaims["username"].(string); ok {
 		claims.Username = username
 	}
-	
+
 	return claims
 }
 

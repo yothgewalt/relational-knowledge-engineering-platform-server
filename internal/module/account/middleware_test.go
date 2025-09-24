@@ -270,7 +270,7 @@ func TestAccountMiddleware_Integration(t *testing.T) {
 		ar.ID = "507f1f77bcf86cd799439011"
 		ar.IsActive = true
 	})
-	mockService.On("GetAccountByID", mock.Anything, "507f1f77bcf86cd799439011").Return(activeResponse, nil).Times(2) // Called by both middlewares
+	mockService.On("GetAccountByID", mock.Anything, "507f1f77bcf86cd799439011").Return(activeResponse, nil).Times(2)
 
 	middleware := NewAccountMiddleware(mockService)
 
